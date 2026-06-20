@@ -40,6 +40,7 @@ async def search_places(query: str, language: str = "ko") -> list[dict]:
     results = []
     for r in data.get("results", []):
         loc = r.get("geometry", {}).get("location", {})
+        photos = r.get("photos", [])
         results.append(
             {
                 "google_place_id": r.get("place_id"),
@@ -49,6 +50,7 @@ async def search_places(query: str, language: str = "ko") -> list[dict]:
                 "lng": loc.get("lng"),
                 "rating": r.get("rating"),
                 "types": r.get("types", []),
+                "photo_reference": photos[0].get("photo_reference") if photos else None,
             }
         )
     return results

@@ -66,7 +66,15 @@ export type PlaceSearchResult = {
   lng: number | null;
   rating?: number;
   types?: string[];
+  photo_reference?: string | null;
 };
+
+// Google Place 사진 URL (지도와 같은 클라이언트 키로 직접 로드)
+const _MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? "";
+export function placePhotoUrl(ref: string | null | undefined, maxwidth = 400): string | null {
+  if (!ref || !_MAPS_KEY) return null;
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxwidth}&photo_reference=${encodeURIComponent(ref)}&key=${_MAPS_KEY}`;
+}
 
 export type Expense = {
   id: number;
