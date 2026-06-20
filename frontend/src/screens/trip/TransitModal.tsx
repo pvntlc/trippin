@@ -5,10 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { mapsApi, type Place, type TransitOption } from "../../services/api";
 import { Colors } from "../../constants/colors";
 
-function nowHHMM(): string {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
+// 계획 시간이 없을 때 기본 출발 시각 (여행은 보통 미래 날짜라 '지금'은 의미 없음 → 관광 시작 시각)
+const DEFAULT_DEPART = "09:00";
+
 function shift(hhmm: string, delta: number): string {
   const [h, m] = hhmm.split(":").map(Number);
   const t = ((h * 60 + m + delta) % 1440 + 1440) % 1440;
@@ -31,14 +30,14 @@ export function TransitModal({
   onSelect: (o: TransitOption) => void;
   onClose: () => void;
 }) {
-  const [depart, setDepart] = useState<string>(nowHHMM());
-  // 출발지에 계획 시간이 없으면 현재 시각 기준(=경고 대상)
+  const [depart, setDepart] = useState<string>(DEFAULT_DEPART);
+  // 출발지에 계획 시간이 없으면 기본(오전 9시) 기준(=경고 대상)
   const noPlan = !from?.planned_time;
 
   // 모달을 열거나 다른 구간으로 바뀔 때마다 계획 시간으로 다시 맞춤
   // (TransitModal 은 항상 마운트돼 있어 useState 초기값만으론 갱신되지 않음)
   useEffect(() => {
-    if (visible && from) setDepart(from.planned_time || nowHHMM());
+    if (visible && from) setDepart(from.planned_time || DEFAULT_DEPART);
   }, [visible, from?.id, from?.planned_time]);
 
   const { data, isFetching } = useQuery({
@@ -72,7 +71,7 @@ export function TransitModal({
 
           {noPlan && (
             <View style={styles.warnBox}>
-              <Text style={styles.warnText}>⚠️ 출발 장소에 계획 시간이 없어 현재 시각 기준이에요. ◀▶로 맞춰보세요.</Text>
+              <Text style={styles.warnText}>⚠️ 출발 장소에 계획 시간이 없어 오전 9시 기준이에요. ◀▶로 맞춰보세요.</Text>
             </View>
           )}
 
