@@ -5,7 +5,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { APIProvider, Map, Marker, InfoWindow, useMap } from "@vis.gl/react-google-maps";
 
 import { Colors } from "../constants/colors";
-import { mapCenter, type MapPlace, type MapRoute } from "./mapTypes";
+import { mapCenter, type MapPlace, type MapRoute, type MapStation } from "./mapTypes";
 
 const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? "";
 
@@ -35,7 +35,45 @@ function Routes({ routes }: { routes: MapRoute[] }) {
   return null;
 }
 
-export function PlacesMap({ places, routes = [] }: { places: MapPlace[]; routes?: MapRoute[] }) {
+// 역 마커 — 작은 흰 원 + 역명 라벨 (google.maps API 직접)
+function Stations({ stations }: { stations: MapStation[] }) {
+  const map = useMap();
+  useEffect(() => {
+    const g = (window as any).google;
+    if (!map || !g?.maps) return;
+    const markers = stations.map(
+      (s) =>
+        new g.maps.Marker({
+          position: { lat: s.lat, lng: s.lng },
+          map,
+          title: s.name,
+          label: { text: `🚉 ${s.name}`, fontSize: "11px", fontWeight: "700", color: "#0284c7" },
+          icon: {
+            path: g.maps.SymbolPath.CIRCLE,
+            scale: 5,
+            fillColor: "#ffffff",
+            fillOpacity: 1,
+            strokeColor: "#0284c7",
+            strokeWeight: 2,
+            labelOrigin: new g.maps.Point(0, 3.4), // 라벨을 점 아래로
+          },
+          zIndex: 999,
+        })
+    );
+    return () => markers.forEach((m: any) => m.setMap(null));
+  }, [map, stations]);
+  return null;
+}
+
+export function PlacesMap({
+  places,
+  routes = [],
+  stations = [],
+}: {
+  places: MapPlace[];
+  routes?: MapRoute[];
+  stations?: MapStation[];
+}) {
   const c = mapCenter(places);
   const [selected, setSelected] = useState<MapPlace | null>(null);
 
@@ -60,6 +98,7 @@ export function PlacesMap({ places, routes = [] }: { places: MapPlace[]; routes?
           disableDefaultUI={false}
         >
           <Routes routes={routes} />
+          <Stations stations={stations} />
           {places.map((p) => (
             <Marker
               key={p.id}

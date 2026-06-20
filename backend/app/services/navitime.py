@@ -177,6 +177,21 @@ def _parse_item(it: dict) -> dict:
     sections = it.get("sections", [])
     # 경로 지오메트리: NAVITIME은 노선 shape를 안 줘서 지점(역) 좌표를 순서대로 이음
     shape = [c for c in (_coord(s) for s in sections if s.get("type") == "point") if c]
+    # 타고/내리는 역(전철 구간의 양 끝 지점) — 지도에 마커로 표시
+    stations: list[dict] = []
+    seen_st = set()
+    for i, s in enumerate(sections):
+        if s.get("type") != "move" or s.get("move") == "walk":
+            continue
+        for j in (i - 1, i + 1):
+            pt = sections[j] if 0 <= j < len(sections) and sections[j].get("type") == "point" else None
+            if not pt:
+                continue
+            c = _coord(pt)
+            nm = _clean_pt(pt.get("name", ""))
+            if c and nm and nm not in seen_st:
+                seen_st.add(nm)
+                stations.append({"name": nm, "lat": c[0], "lng": c[1], "board": j == i - 1})
     steps = []
     # 실제 이동은 '도보 → 전철 → 도보' 처럼 구성됨. 도보 구간도 모두 포함한다.
     # 역/지점 이름은 인접한 point 섹션에서 가져옴.
@@ -208,6 +223,7 @@ def _parse_item(it: dict) -> dict:
         "arrive": arrive,
         "steps": steps,
         "shape": shape,
+        "stations": stations,
     }
 
 
@@ -245,4 +261,5 @@ async def transit_route(origin: str, destination: str, depart: str | None = None
         "transit_lines": [s["line"] for s in best["steps"] if s["mode"] == "transit"],
         "options": options,
         "polyline": best.get("shape", []),
+        "stations": best.get("stations", []),
     }

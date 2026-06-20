@@ -5,9 +5,17 @@ import { View, StyleSheet } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
 import { Colors } from "../constants/colors";
-import { mapCenter, type MapPlace, type MapRoute } from "./mapTypes";
+import { mapCenter, type MapPlace, type MapRoute, type MapStation } from "./mapTypes";
 
-export function PlacesMap({ places, routes = [] }: { places: MapPlace[]; routes?: MapRoute[] }) {
+export function PlacesMap({
+  places,
+  routes = [],
+  stations = [],
+}: {
+  places: MapPlace[];
+  routes?: MapRoute[];
+  stations?: MapStation[];
+}) {
   const c = mapCenter(places);
   return (
     <View style={styles.container}>
@@ -21,6 +29,15 @@ export function PlacesMap({ places, routes = [] }: { places: MapPlace[]; routes?
             coordinates={r.coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))}
             strokeColor={r.color}
             strokeWidth={4}
+          />
+        ))}
+        {stations.map((s) => (
+          <Marker
+            key={s.key}
+            coordinate={{ latitude: s.lat, longitude: s.lng }}
+            title={`🚉 ${s.name}`}
+            description={s.board ? "승차" : "환승/하차"}
+            pinColor={Colors.accentDeep}
           />
         ))}
         {places.map((p) => (

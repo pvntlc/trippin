@@ -218,7 +218,10 @@ export type DirectionsResult = {
   fare_text?: string | null;
   options?: TransitOption[];
   polyline?: LatLngTuple[];
+  stations?: TransitStation[];
 };
+
+export type TransitStation = { name: string; lat: number; lng: number; board: boolean };
 
 export type TransitStep = {
   mode: "walk" | "transit";
@@ -229,7 +232,7 @@ export type TransitStep = {
   to_name: string;
   duration_text: string | null;
 };
-export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[]; shape?: LatLngTuple[] };
+export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[]; shape?: LatLngTuple[]; stations?: TransitStation[] };
 
 export const mapsApi = {
   search: (q: string) =>
