@@ -24,11 +24,33 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body}`);
+    throw new Error(await errorMessage(res));
   }
   if (res.status === 204) return undefined as T;
   return res.json();
+}
+
+// 서버 에러를 사람이 읽을 수 있는 한국어 메시지로 정리.
+// FastAPI 는 detail 이 문자열(직접 메시지)이거나 검증 오류 배열일 수 있음.
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    const d = data?.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d) && d.length) {
+      const first = d[0];
+      const field = String(first?.loc?.[first.loc.length - 1] ?? "");
+      const ko: Record<string, string> = { email: "이메일", password: "비밀번호", name: "이름" };
+      if (first?.type === "string_too_short") return `${ko[field] ?? field}이(가) 너무 짧아요.`;
+      if (field === "email") return "이메일 형식이 올바르지 않아요.";
+      return first?.msg ?? "입력을 확인해 주세요.";
+    }
+  } catch {
+    // JSON 아님 → 상태코드로 폴백
+  }
+  if (res.status === 401) return "이메일 또는 비밀번호가 올바르지 않아요.";
+  if (res.status >= 500) return "서버 오류가 발생했어요. 잠시 후 다시 시도해 주세요.";
+  return `요청 실패 (${res.status})`;
 }
 
 // ── 타입 ──────────────────────────────────────────────
