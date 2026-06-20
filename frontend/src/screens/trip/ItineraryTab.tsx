@@ -109,7 +109,7 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
         </TouchableOpacity>
       )}
 
-      <PlaceSearchModal tripId={tripId} dayCount={dayCount} visible={showSearch} onClose={() => setShowSearch(false)} />
+      <PlaceSearchModal tripId={tripId} destination={trip.destination} dayCount={dayCount} visible={showSearch} onClose={() => setShowSearch(false)} />
       <PlaceEditModal tripId={tripId} place={editing} dayCount={dayCount} onClose={() => setEditing(null)} />
     </View>
   );
