@@ -50,6 +50,10 @@ export function TravelLeg({
     simple = data.no_route || !data.duration_text ? "경로 정보 없음" : `${data.duration_text} · ${data.distance_text ?? ""}`;
   }
 
+  // 도착이 다음 장소 계획 시각보다 늦으면 일정 충돌 경고 (HH:MM 문자열 비교, 같은 날 기준)
+  const lateArrival =
+    chosen != null && !!to.planned_time && !!chosen.arrive && chosen.arrive > to.planned_time;
+
   return (
     <View style={styles.row}>
       <View style={styles.line} />
@@ -72,18 +76,28 @@ export function TravelLeg({
                 {chosen.steps.length === 0
                   ? "🚶 도보"
                   : chosen.steps
-                      .map((s) => (s.mode === "walk" ? `🚶${s.duration_text ?? "도보"}` : `🚃${s.line.split(" (")[0]}`))
+                      .map((s) =>
+                        s.mode === "walk"
+                          ? `🚶${s.duration_text ?? "도보"}`
+                          : `🚃${s.line.split(" (")[0]}${s.from_name ? `·${s.from_name} 승차` : ""}`
+                      )
                       .join(" → ")}
               </Text>
             </>
           ) : (
             <Text style={styles.pick}>🚇 대중교통 시간 선택하기 →</Text>
           )}
-          {!from.planned_time && (
+          {lateArrival ? (
+            <View style={styles.warnBadge}>
+              <Text style={styles.warnBadgeText}>
+                ⚠️ {to.name} 계획 {to.planned_time}인데 {chosen!.arrive} 도착 (늦음)
+              </Text>
+            </View>
+          ) : !from.planned_time ? (
             <View style={styles.warnBadge}>
               <Text style={styles.warnBadgeText}>⚠️ 계획 시간 미설정 · 현재 시각 기준</Text>
             </View>
-          )}
+          ) : null}
         </TouchableOpacity>
       ) : (
         <View style={{ flex: 1 }}>
