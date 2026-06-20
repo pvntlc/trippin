@@ -1,12 +1,38 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { placeApi, type Place, type Trip } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
 import { TravelLeg } from "./TravelLeg";
+
+// 두 좌표 직선거리(km) — 코스 정렬용
+function haversine(a: Place, b: Place): number {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad((b.lat ?? 0) - (a.lat ?? 0));
+  const dLng = toRad((b.lng ?? 0) - (a.lng ?? 0));
+  const la1 = toRad(a.lat ?? 0), la2 = toRad(b.lat ?? 0);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+// 최단거리 근사(nearest-neighbor): 첫 장소에서 시작해 가까운 곳 순으로 잇기
+function optimizeRoute(places: Place[]): Place[] {
+  const coord = places.filter((p) => p.lat != null && p.lng != null);
+  const noCoord = places.filter((p) => p.lat == null || p.lng == null);
+  if (coord.length < 3) return places;
+  const remaining = [...coord];
+  const route: Place[] = [remaining.shift()!];
+  while (remaining.length) {
+    const last = route[route.length - 1];
+    let bi = 0, bd = Infinity;
+    remaining.forEach((p, i) => { const d = haversine(last, p); if (d < bd) { bd = d; bi = i; } });
+    route.push(remaining.splice(bi, 1)[0]);
+  }
+  return [...route, ...noCoord];
+}
 
 function daysBetween(start: string, end: string): number {
   const s = new Date(start).getTime();
@@ -44,9 +70,22 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
   const [mode, setMode] = useState<Mode>("walking");
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 
+  const qc = useQueryClient();
   const { data: places, isLoading } = useQuery({
     queryKey: ["places", tripId],
     queryFn: () => placeApi.list(tripId),
+  });
+
+  const optimizeMut = useMutation({
+    mutationFn: async (dayPlaces: Place[]) => {
+      const ordered = optimizeRoute(dayPlaces);
+      await Promise.all(
+        ordered
+          .map((p, i) => (p.order_index === i ? null : placeApi.update(tripId, p.id, { order_index: i })))
+          .filter(Boolean) as Promise<unknown>[]
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["places", tripId] }),
   });
 
   const sections = useMemo<Section[]>(() => {
@@ -92,18 +131,26 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
             ))}
           </View>
         }
-        renderSectionHeader={({ section }) => (
-          <View style={styles.dayHeaderRow}>
-            <Text style={styles.dayHeader}>{section.title}</Text>
-            {!!section.date && <Text style={styles.dayDate}>{section.date}</Text>}
-            <View style={{ flex: 1 }} />
-            {canEdit && (
-              <TouchableOpacity style={styles.addDayBtn} onPress={() => openSearch(section.dayIndex)}>
-                <Text style={styles.addDayText}>＋ 추가</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        renderSectionHeader={({ section }) => {
+          const coordCount = section.data.filter((p) => p.lat != null && p.lng != null).length;
+          return (
+            <View style={styles.dayHeaderRow}>
+              <Text style={styles.dayHeader}>{section.title}</Text>
+              {!!section.date && <Text style={styles.dayDate}>{section.date}</Text>}
+              <View style={{ flex: 1 }} />
+              {canEdit && coordCount >= 3 && (
+                <TouchableOpacity style={styles.optBtn} onPress={() => optimizeMut.mutate(section.data)} disabled={optimizeMut.isPending}>
+                  <Text style={styles.optText}>🧭 최적순서</Text>
+                </TouchableOpacity>
+              )}
+              {canEdit && (
+                <TouchableOpacity style={styles.addDayBtn} onPress={() => openSearch(section.dayIndex)}>
+                  <Text style={styles.addDayText}>＋ 추가</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        }}
         renderSectionFooter={({ section }) =>
           section.data.length === 0 ? <Text style={styles.emptyDay}>일정 없음 — ＋ 추가로 장소를 넣어보세요</Text> : null
         }
@@ -163,6 +210,8 @@ const styles = StyleSheet.create({
   dayDate: { fontSize: 13, color: Colors.textSub, fontWeight: "500" },
   addDayBtn: { backgroundColor: Colors.bgCardAlt, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   addDayText: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },
+  optBtn: { backgroundColor: Colors.accentDeep, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16 },
+  optText: { fontSize: 13, fontWeight: "700", color: Colors.white },
   emptyDay: { color: Colors.textMuted, fontSize: 13, paddingVertical: 8, paddingLeft: 4 },
   placeCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bgCard, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   time: { fontSize: 13, fontWeight: "700", color: Colors.accent, width: 44 },
