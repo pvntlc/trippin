@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { mapsApi, placeApi, type PlaceSearchResult } from "../../services/api";
 import { Colors } from "../../constants/colors";
+import { placeTypeLabel } from "../../utils/placeTypes";
 
 // 추천 카테고리: 표시 라벨 / 구글 검색 접두어(영문이 유명도순 결과가 좋음) / 일정 분류
 const REC_CATS = [
@@ -53,6 +54,14 @@ export function PlaceSearchModal({
   const searchMut = useMutation({
     mutationFn: () => mapsApi.search(q.trim()),
     onSuccess: (r) => { setSearchResults(r.results); setSearched(true); },
+  });
+
+  // 선택한 장소의 리뷰 AI 요약 (분류·평점은 검색 결과에 이미 있음)
+  const { data: summary, isFetching: summaryLoading } = useQuery({
+    queryKey: ["placeSummary", picked?.place.google_place_id],
+    queryFn: () => mapsApi.placeSummary(picked!.place.google_place_id),
+    enabled: !!picked,
+    staleTime: 10 * 60_000,
   });
 
   const addMut = useMutation({
@@ -117,7 +126,9 @@ export function PlaceSearchModal({
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.resultName}>{item.name}</Text>
-                <Text style={styles.resultAddr} numberOfLines={1}>{item.address}</Text>
+                <Text style={styles.resultAddr} numberOfLines={1}>
+                  {placeTypeLabel(item.types)} · {item.address}
+                </Text>
               </View>
               {item.rating != null && <Text style={styles.rating}>★ {item.rating}</Text>}
             </TouchableOpacity>
@@ -164,8 +175,29 @@ export function PlaceSearchModal({
             <>
               <View style={styles.pickedBox}>
                 <Text style={styles.resultName}>{picked.place.name}</Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.typeChip}>{placeTypeLabel(picked.place.types)}</Text>
+                  {(summary?.rating ?? picked.place.rating) != null && (
+                    <Text style={styles.ratingMeta}>
+                      ★ {summary?.rating ?? picked.place.rating}
+                      {!!summary?.user_ratings_total && ` (${summary.user_ratings_total.toLocaleString()})`}
+                    </Text>
+                  )}
+                </View>
                 <Text style={styles.resultAddr} numberOfLines={2}>{picked.place.address}</Text>
+
+                <View style={styles.summaryBox}>
+                  <Text style={styles.summaryLabel}>🤖 리뷰 요약</Text>
+                  {summaryLoading ? (
+                    <Text style={styles.summaryLoading}>리뷰를 요약하는 중…</Text>
+                  ) : summary?.review_summary ? (
+                    <Text style={styles.summaryText}>{summary.review_summary}</Text>
+                  ) : (
+                    <Text style={styles.summaryLoading}>요약할 리뷰가 없어요.</Text>
+                  )}
+                </View>
               </View>
+              <Text style={styles.dayPrompt}>어느 날 일정에 넣을까요?</Text>
               <View style={styles.dayGrid}>
                 {dayOptions.map((d) => (
                   <TouchableOpacity
@@ -210,7 +242,15 @@ const styles = StyleSheet.create({
   resultName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   resultAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   rating: { fontSize: 13, color: Colors.accentDeep, fontWeight: "600" },
-  pickedBox: { backgroundColor: Colors.bgCardAlt, borderRadius: 12, padding: 14, marginBottom: 16 },
+  pickedBox: { backgroundColor: Colors.bgCardAlt, borderRadius: 12, padding: 14, marginBottom: 14 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  typeChip: { fontSize: 12, fontWeight: "700", color: Colors.white, backgroundColor: Colors.accent, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  ratingMeta: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },
+  summaryBox: { marginTop: 12, backgroundColor: Colors.bgCard, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border },
+  summaryLabel: { fontSize: 12, fontWeight: "700", color: Colors.textSub, marginBottom: 6 },
+  summaryText: { fontSize: 14, color: Colors.text, lineHeight: 21 },
+  summaryLoading: { fontSize: 13, color: Colors.textMuted },
+  dayPrompt: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginBottom: 10 },
   dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   dayBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12 },
   dayBtnText: { color: Colors.white, fontWeight: "700", fontSize: 14 },

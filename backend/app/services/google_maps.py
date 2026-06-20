@@ -79,6 +79,27 @@ async def place_details(place_id: str, language: str = "ko") -> dict:
     }
 
 
+async def place_reviews(place_id: str, language: str = "ko") -> dict:
+    """평점·리뷰수·리뷰 텍스트 목록 조회 (요약용)."""
+    key = _require_key()
+    fields = "name,rating,user_ratings_total,reviews,types"
+    params = {"place_id": place_id, "fields": fields, "language": language, "key": key}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.get(_PLACE_DETAILS, params=params)
+    data = resp.json()
+    if data.get("status") != "OK":
+        raise GoogleMapsError(f"Place 상세 실패: {data.get('status')}")
+    r = data.get("result", {})
+    reviews = [rv.get("text", "") for rv in r.get("reviews", []) if rv.get("text")]
+    return {
+        "name": r.get("name", ""),
+        "rating": r.get("rating"),
+        "user_ratings_total": r.get("user_ratings_total", 0),
+        "reviews": reviews,
+        "types": r.get("types", []),
+    }
+
+
 async def directions(origin: str, destination: str, mode: str = "transit", language: str = "ko") -> dict:
     """두 지점 간 경로/소요시간. origin·destination 은 'lat,lng' 또는 place_id:xxx.
 

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Google Maps Platform (서버 전용 키)
     google_maps_api_key: str = ""
 
+    # Anthropic (리뷰 요약). ANTHROPIC_API_KEY 는 시스템 예약 가능 → APP_ 접두사 사용.
+    app_anthropic_api_key: str = ""
+
     # CORS (콤마 구분 문자열)
     cors_origins: str = "*"
 

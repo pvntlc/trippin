@@ -15,9 +15,10 @@ jobs:
       # ── 1) Secrets 로부터 백엔드 .env 생성 ──────────────────
       - name: Create backend .env
         env:
-          JWT_SECRET:          ${{ secrets.JWT_SECRET }}
-          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          CORS_ORIGINS:        ${{ secrets.CORS_ORIGINS }}
+          JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          GOOGLE_MAPS_API_KEY:  ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          CORS_ORIGINS:         ${{ secrets.CORS_ORIGINS }}
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           {
             echo "APP_ENV=production"
@@ -27,6 +28,7 @@ jobs:
             echo "JWT_EXPIRE_MINUTES=43200"
             echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
             echo "CORS_ORIGINS=${CORS_ORIGINS:-*}"
+            echo "APP_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
           } > backend/.env
 
       # ── 2) 프론트엔드 Expo web 빌드 ─────────────────────────
