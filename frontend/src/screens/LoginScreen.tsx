@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 
 import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
@@ -11,18 +11,37 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  // Alert.alert 은 웹(react-native-web)에서 동작하지 않으므로 화면에 직접 표시
+  const [error, setError] = useState<string | null>(null);
+
+  const switchMode = () => {
+    setMode(mode === "login" ? "register" : "login");
+    setError(null);
+  };
 
   const submit = async () => {
-    if (!email || !password || (mode === "register" && !name)) {
-      Alert.alert("입력 확인", "모든 항목을 입력해 주세요.");
+    setError(null);
+    const em = email.trim();
+    if (!em || !password || (mode === "register" && !name.trim())) {
+      setError("모든 항목을 입력해 주세요.");
       return;
+    }
+    if (mode === "register") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+        setError("올바른 이메일 주소를 입력해 주세요.");
+        return;
+      }
+      if (password.length < 6) {
+        setError("비밀번호는 6자 이상이어야 해요.");
+        return;
+      }
     }
     setBusy(true);
     try {
-      if (mode === "login") await login(email, password);
-      else await register(email, password, name);
+      if (mode === "login") await login(em, password);
+      else await register(em, password, name.trim());
     } catch (e: any) {
-      Alert.alert("오류", e?.message ?? "실패했습니다.");
+      setError(e?.message ?? "실패했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setBusy(false);
     }
@@ -59,6 +78,13 @@ export function LoginScreen() {
         secureTextEntry
         placeholderTextColor={Colors.textMuted}
       />
+      {mode === "register" && <Text style={styles.hint}>비밀번호는 6자 이상이어야 해요.</Text>}
+
+      {error && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
 
       <TouchableOpacity style={styles.button} onPress={submit} disabled={busy}>
         {busy ? (
@@ -68,7 +94,7 @@ export function LoginScreen() {
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => setMode(mode === "login" ? "register" : "login")}>
+      <TouchableOpacity onPress={switchMode}>
         <Text style={styles.switch}>
           {mode === "login" ? "계정이 없으신가요? 회원가입" : "이미 계정이 있으신가요? 로그인"}
         </Text>
@@ -100,5 +126,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: "700" },
+  hint: { color: Colors.textMuted, fontSize: 12, marginTop: -4, marginBottom: 8, marginLeft: 4 },
+  errorBox: { backgroundColor: "#fef2f2", borderColor: Colors.danger, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4 },
+  errorText: { color: Colors.danger, fontSize: 13.5, fontWeight: "600", textAlign: "center" },
   switch: { color: Colors.accentDeep, textAlign: "center", marginTop: 20, fontSize: 14 },
 });
