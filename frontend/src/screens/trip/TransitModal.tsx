@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
@@ -31,7 +31,15 @@ export function TransitModal({
   onSelect: (o: TransitOption) => void;
   onClose: () => void;
 }) {
-  const [depart, setDepart] = useState<string>(from?.planned_time || nowHHMM());
+  const [depart, setDepart] = useState<string>(nowHHMM());
+  // 출발지에 계획 시간이 없으면 현재 시각 기준(=경고 대상)
+  const noPlan = !from?.planned_time;
+
+  // 모달을 열거나 다른 구간으로 바뀔 때마다 계획 시간으로 다시 맞춤
+  // (TransitModal 은 항상 마운트돼 있어 useState 초기값만으론 갱신되지 않음)
+  useEffect(() => {
+    if (visible && from) setDepart(from.planned_time || nowHHMM());
+  }, [visible, from?.id, from?.planned_time]);
 
   const { data, isFetching } = useQuery({
     queryKey: ["transitModal", from?.id, to?.id, depart],
@@ -61,6 +69,12 @@ export function TransitModal({
               <Text style={styles.arrowText}>다음 ▶</Text>
             </TouchableOpacity>
           </View>
+
+          {noPlan && (
+            <View style={styles.warnBox}>
+              <Text style={styles.warnText}>⚠️ 출발 장소에 계획 시간이 없어 현재 시각 기준이에요. ◀▶로 맞춰보세요.</Text>
+            </View>
+          )}
 
           {isFetching ? (
             <ActivityIndicator color={Colors.accent} style={{ marginVertical: 30 }} />
@@ -103,6 +117,8 @@ const styles = StyleSheet.create({
   arrow: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: Colors.bgCard },
   arrowText: { fontSize: 14, fontWeight: "700", color: Colors.accentDeep },
   timeLabel: { fontSize: 15, fontWeight: "800", color: Colors.text },
+  warnBox: { backgroundColor: Colors.warnBg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12 },
+  warnText: { fontSize: 12.5, color: Colors.warn, fontWeight: "600", lineHeight: 18 },
   empty: { textAlign: "center", color: Colors.textMuted, marginVertical: 30, paddingHorizontal: 20, lineHeight: 20 },
   opt: { borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, marginBottom: 10 },
   optChosen: { borderColor: Colors.accent, backgroundColor: "#f0f9ff" },

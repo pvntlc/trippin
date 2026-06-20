@@ -73,6 +73,7 @@ export function TravelLeg({
           ) : (
             <Text style={styles.pick}>🚇 대중교통 시간 선택하기 →</Text>
           )}
+          {!from.planned_time && <Text style={styles.warn}>⚠️ 출발 장소 계획 시간 미설정 (현재 시각 기준)</Text>}
         </TouchableOpacity>
       ) : (
         <View style={{ flex: 1 }}>
@@ -93,4 +94,5 @@ const styles = StyleSheet.create({
   text: { fontSize: 12, color: Colors.textSub, fontWeight: "500" },
   lines: { fontSize: 12, color: Colors.accentDeep, fontWeight: "600", marginTop: 1 },
   pick: { fontSize: 12, color: Colors.accentDeep, fontWeight: "700" },
+  warn: { fontSize: 11, color: Colors.warn, fontWeight: "600", marginTop: 1 },
 });
