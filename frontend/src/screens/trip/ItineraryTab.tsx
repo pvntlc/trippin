@@ -8,6 +8,7 @@ import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
 import { TravelLeg, type LegMode } from "./TravelLeg";
 import { TransitModal } from "./TransitModal";
+import { ReorderModal } from "./ReorderModal";
 
 // 두 좌표 직선거리(km) — 코스 정렬용
 function haversine(a: Place, b: Place): number {
@@ -82,6 +83,7 @@ export function ItineraryTab({
   const [searchDay, setSearchDay] = useState<number | null | undefined>(undefined);
   const [editing, setEditing] = useState<Place | null>(null);
   const [transitModal, setTransitModal] = useState<{ from: Place; to: Place; key: string } | null>(null);
+  const [reorderDay, setReorderDay] = useState<{ label: string; places: Place[] } | null>(null);
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 
   const qc = useQueryClient();
@@ -140,6 +142,11 @@ export function ItineraryTab({
               <Text style={styles.dayHeader}>{section.title}</Text>
               {!!section.date && <Text style={styles.dayDate}>{section.date}</Text>}
               <View style={{ flex: 1 }} />
+              {canEdit && section.dayIndex !== null && section.data.length >= 2 && (
+                <TouchableOpacity style={styles.reorderBtn} onPress={() => setReorderDay({ label: section.title, places: section.data })}>
+                  <Text style={styles.reorderText}>⇅ 순서</Text>
+                </TouchableOpacity>
+              )}
               {canEdit && coordCount >= 3 && (
                 <TouchableOpacity style={styles.optBtn} onPress={() => optimizeMut.mutate(section.data)} disabled={optimizeMut.isPending}>
                   <Text style={styles.optText}>🧭 최적순서</Text>
@@ -219,6 +226,14 @@ export function ItineraryTab({
         }}
         onClose={() => setTransitModal(null)}
       />
+
+      <ReorderModal
+        tripId={tripId}
+        dayLabel={reorderDay?.label ?? ""}
+        places={reorderDay?.places ?? []}
+        visible={reorderDay != null}
+        onClose={() => setReorderDay(null)}
+      />
     </View>
   );
 }
@@ -239,6 +254,8 @@ const styles = StyleSheet.create({
   addDayText: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },
   optBtn: { backgroundColor: Colors.accentDeep, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16 },
   optText: { fontSize: 13, fontWeight: "700", color: Colors.white },
+  reorderBtn: { backgroundColor: Colors.bgCardAlt, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16 },
+  reorderText: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },
   emptyDay: { color: Colors.textMuted, fontSize: 13, paddingVertical: 8, paddingLeft: 4 },
   placeCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bgCard, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   time: { fontSize: 13, fontWeight: "700", color: Colors.accent, width: 44 },
