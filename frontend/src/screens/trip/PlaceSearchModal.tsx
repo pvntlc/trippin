@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { mapsApi, placeApi, type PlaceSearchResult } from "../../services/api";
+import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { placeTypeLabel } from "../../utils/placeTypes";
 
@@ -124,6 +124,11 @@ export function PlaceSearchModal({
               style={styles.resultRow}
               onPress={() => setPicked({ place: item, category: isSearchMode ? "" : cat.category })}
             >
+              {placePhotoUrl(item.photo_reference, 120) ? (
+                <Image source={{ uri: placePhotoUrl(item.photo_reference, 120)! }} style={styles.thumb} />
+              ) : (
+                <View style={[styles.thumb, styles.thumbEmpty]}><Text style={styles.thumbIcon}>📍</Text></View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.resultName}>{item.name}</Text>
                 <Text style={styles.resultAddr} numberOfLines={1}>
@@ -174,6 +179,9 @@ export function PlaceSearchModal({
           ) : (
             <>
               <View style={styles.pickedBox}>
+                {placePhotoUrl(picked.place.photo_reference, 600) && (
+                  <Image source={{ uri: placePhotoUrl(picked.place.photo_reference, 600)! }} style={styles.hero} resizeMode="cover" />
+                )}
                 <Text style={styles.resultName}>{picked.place.name}</Text>
                 <View style={styles.metaRow}>
                   <Text style={styles.typeChip}>{placeTypeLabel(picked.place.types)}</Text>
@@ -238,7 +246,11 @@ const styles = StyleSheet.create({
   recChipText: { color: Colors.textSub, fontSize: 13, fontWeight: "600" },
   recChipTextOn: { color: Colors.white },
   empty: { textAlign: "center", color: Colors.textMuted, marginVertical: 24, paddingHorizontal: 20, lineHeight: 20 },
-  resultRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  thumb: { width: 52, height: 52, borderRadius: 10, backgroundColor: Colors.bgCardAlt },
+  thumbEmpty: { alignItems: "center", justifyContent: "center" },
+  thumbIcon: { fontSize: 22 },
+  hero: { width: "100%", height: 160, borderRadius: 12, marginBottom: 12, backgroundColor: Colors.bgCard },
   resultName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   resultAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   rating: { fontSize: 13, color: Colors.accentDeep, fontWeight: "600" },
