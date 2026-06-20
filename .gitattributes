@@ -1,0 +1,7 @@
+# 모든 텍스트 파일을 LF 로 정규화 (리눅스 서버 배포 호환).
+* text=auto eol=lf
+
+# 바이너리
+*.png binary
+*.jpg binary
+*.ico binary

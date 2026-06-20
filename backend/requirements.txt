@@ -1,0 +1,21 @@
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# --- DB (async SQLite) ---
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+
+# --- Settings / validation ---
+pydantic[email]==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# --- Auth (JWT + password hashing) ---
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.0.1          # passlib 1.7.4 는 bcrypt 5.x 와 비호환 → 4.0.1 고정
+python-multipart==0.0.20
+
+# --- HTTP client (Google Maps API 프록시) ---
+httpx==0.28.1

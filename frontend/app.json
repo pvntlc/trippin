@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Trippin",
+    "slug": "trippin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "trippin",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trippin.app"
+    },
+    "android": {
+      "package": "com.trippin.app",
+      "usesCleartextTraffic": true
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

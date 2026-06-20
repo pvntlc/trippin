@@ -1,0 +1,105 @@
+name: Deploy to OCI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: SSH Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── 1) Secrets 로부터 백엔드 .env 생성 ──────────────────
+      - name: Create backend .env
+        env:
+          JWT_SECRET:          ${{ secrets.JWT_SECRET }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          CORS_ORIGINS:        ${{ secrets.CORS_ORIGINS }}
+        run: |
+          {
+            echo "APP_ENV=production"
+            echo "APP_HOST=0.0.0.0"
+            echo "APP_PORT=8002"
+            echo "JWT_SECRET=${JWT_SECRET}"
+            echo "JWT_EXPIRE_MINUTES=43200"
+            echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
+            echo "CORS_ORIGINS=${CORS_ORIGINS:-*}"
+          } > backend/.env
+
+      # ── 2) 프론트엔드 Expo web 빌드 ─────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend (Expo web)
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.PUBLIC_API_URL }}
+        run: |
+          cd frontend
+          echo "EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}" > .env
+          npm ci
+          npx expo export --platform web
+      - name: Package frontend dist
+        run: tar -czf frontend-dist.tar.gz -C frontend/dist .
+
+      # ── 3) 서버로 업로드 ────────────────────────────────────
+      - name: Upload backend .env
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          port:     2222
+          source:   "backend/.env"
+          target:   "/home/${{ secrets.OCI_USER }}/trippin/"
+      - name: Upload frontend dist
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          port:     2222
+          source:   "frontend-dist.tar.gz"
+          target:   "/home/${{ secrets.OCI_USER }}/"
+
+      # ── 4) 코드 배포 + 서비스 재시작 ────────────────────────
+      - name: Deploy and restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          port:     2222
+          script: |
+            set -e
+            cd ~/trippin
+            chmod 600 backend/.env
+
+            echo "=== 코드 업데이트 ==="
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "=== Python 의존성 ==="
+            cd backend
+            source venv/bin/activate
+            pip install -r requirements.txt --quiet
+            python -c "import asyncio; from app.core.database import init_db; asyncio.run(init_db()); print('DB OK')"
+            cd ~
+
+            echo "=== 프론트엔드 배포 ==="
+            sudo mkdir -p /var/www/trippin
+            sudo tar -xzf ~/frontend-dist.tar.gz -C /var/www/trippin
+            sudo chown -R www-data:www-data /var/www/trippin
+            rm -f ~/frontend-dist.tar.gz
+
+            echo "=== nginx + 서비스 재시작 ==="
+            sudo cp ~/trippin/deploy/nginx.conf /etc/nginx/sites-available/trippin
+            sudo ln -sf /etc/nginx/sites-available/trippin /etc/nginx/sites-enabled/trippin
+            sudo nginx -t && sudo systemctl reload nginx
+            sudo systemctl restart trippin
+            sleep 4
+            sudo systemctl is-active trippin && echo "trippin 서비스 정상 실행 중"

@@ -1,0 +1,29 @@
+# ── Python (backend) ──────────────────────────────────
+__pycache__/
+*.py[cod]
+backend/venv/
+backend/.env
+*.db
+*.sqlite3
+
+# ── Node / Expo (frontend) ────────────────────────────
+node_modules/
+frontend/.env
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+npm-debug.*
+
+# ── 빌드 산출물 ────────────────────────────────────────
+frontend-dist.tar.gz
+
+# ── OS / 에디터 ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# ── 비밀/키 ───────────────────────────────────────────
+*.key
+*.pem
