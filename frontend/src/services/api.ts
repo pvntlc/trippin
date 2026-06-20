@@ -196,15 +196,16 @@ export type DirectionsResult = {
 };
 
 export type TransitStep = { line: string; from_time: string; to_time: string; from_name: string; to_name: string };
-export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; steps: TransitStep[] };
+export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[] };
 
 export const mapsApi = {
   search: (q: string) =>
     request<{ results: PlaceSearchResult[] }>(`/maps/search?q=${encodeURIComponent(q)}`),
   placeSummary: (placeId: string) =>
     request<PlaceSummary>(`/maps/place/${encodeURIComponent(placeId)}/summary`),
-  directions: (origin: string, destination: string, mode: "walking" | "driving" | "transit") =>
+  directions: (origin: string, destination: string, mode: "walking" | "driving" | "transit", depart?: string) =>
     request<DirectionsResult>(
-      `/maps/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}`
+      `/maps/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}` +
+        (depart ? `&depart=${encodeURIComponent(depart)}` : "")
     ),
 };

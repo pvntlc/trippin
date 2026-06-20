@@ -128,7 +128,7 @@ def _parse_latlng(s: str) -> dict:
     return {"location": {"latLng": {"latitude": float(lat), "longitude": float(lng)}}}
 
 
-async def directions(origin: str, destination: str, mode: str = "walking", language: str = "ko") -> dict:
+async def directions(origin: str, destination: str, mode: str = "walking", language: str = "ko", depart: str | None = None) -> dict:
     """두 지점('lat,lng') 간 경로/소요시간 — Routes API.
 
     mode: walking | driving | transit | bicycling
@@ -139,7 +139,7 @@ async def directions(origin: str, destination: str, mode: str = "walking", langu
     if mode == "transit":
         from app.services import navitime
         if navitime.in_japan(origin) and settings.navitime_api_key:
-            nav = await navitime.transit_route(origin, destination)
+            nav = await navitime.transit_route(origin, destination, depart)
             if nav is not None:
                 return nav
 
