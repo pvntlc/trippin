@@ -56,7 +56,7 @@ export function TripDetailScreen({ route }: Props) {
       </View>
 
       <View style={{ flex: 1 }}>
-        {tab === "itinerary" && <ItineraryTab trip={trip} />}
+        {tab === "itinerary" && <ItineraryTab trip={trip} canEdit={canEdit} />}
         {tab === "budget" && <BudgetTab tripId={tripId} canEdit={canEdit} currency={trip.currency} />}
         {tab === "checklist" && <ChecklistTab tripId={tripId} canEdit={canEdit} />}
       </View>

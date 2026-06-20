@@ -49,6 +49,7 @@ export type Place = {
   day_index: number | null;
   order_index: number;
   name: string;
+  google_place_id: string | null;
   address: string;
   category: string;
   planned_time: string;
