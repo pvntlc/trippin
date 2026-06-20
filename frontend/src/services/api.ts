@@ -66,6 +66,30 @@ export type PlaceSearchResult = {
   rating?: number;
 };
 
+export type Expense = {
+  id: number;
+  trip_id: number;
+  day_index: number | null;
+  title: string;
+  amount: number;
+  currency: string;
+  category: string;
+  paid_by: number | null;
+};
+
+export type ExpenseSummary = {
+  by_currency: Record<string, number>;
+  by_category: Record<string, number>;
+};
+
+export type ChecklistItem = {
+  id: number;
+  trip_id: number;
+  text: string;
+  is_done: boolean;
+  order_index: number;
+};
+
 // ── Auth ──────────────────────────────────────────────
 export const authApi = {
   register: (email: string, password: string, name: string) =>
@@ -105,6 +129,27 @@ export const placeApi = {
     request<Place>(`/trips/${tripId}/places/${placeId}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (tripId: number, placeId: number) =>
     request<void>(`/trips/${tripId}/places/${placeId}`, { method: "DELETE" }),
+};
+
+// ── Expenses ──────────────────────────────────────────
+export const expenseApi = {
+  list: (tripId: number) => request<Expense[]>(`/trips/${tripId}/expenses`),
+  summary: (tripId: number) => request<ExpenseSummary>(`/trips/${tripId}/expenses/summary`),
+  add: (tripId: number, data: Partial<Expense>) =>
+    request<Expense>(`/trips/${tripId}/expenses`, { method: "POST", body: JSON.stringify(data) }),
+  remove: (tripId: number, id: number) =>
+    request<void>(`/trips/${tripId}/expenses/${id}`, { method: "DELETE" }),
+};
+
+// ── Checklist ─────────────────────────────────────────
+export const checklistApi = {
+  list: (tripId: number) => request<ChecklistItem[]>(`/trips/${tripId}/checklist`),
+  add: (tripId: number, text: string) =>
+    request<ChecklistItem>(`/trips/${tripId}/checklist`, { method: "POST", body: JSON.stringify({ text }) }),
+  update: (tripId: number, id: number, data: Partial<ChecklistItem>) =>
+    request<ChecklistItem>(`/trips/${tripId}/checklist/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  remove: (tripId: number, id: number) =>
+    request<void>(`/trips/${tripId}/checklist/${id}`, { method: "DELETE" }),
 };
 
 // ── Maps (백엔드 프록시) ───────────────────────────────
