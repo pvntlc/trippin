@@ -8,6 +8,7 @@ import { Colors } from "../constants/colors";
 import { ItineraryTab } from "./trip/ItineraryTab";
 import { BudgetTab } from "./trip/BudgetTab";
 import { ChecklistTab } from "./trip/ChecklistTab";
+import { MembersModal } from "./trip/MembersModal";
 import type { RootStackParamList } from "../../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TripDetail">;
@@ -23,6 +24,7 @@ type TabKey = (typeof TABS)[number]["key"];
 export function TripDetailScreen({ route }: Props) {
   const { tripId } = route.params;
   const [tab, setTab] = useState<TabKey>("itinerary");
+  const [showMembers, setShowMembers] = useState(false);
 
   const { data: trip, isLoading } = useQuery({ queryKey: ["trip", tripId], queryFn: () => tripApi.get(tripId) });
 
@@ -35,8 +37,13 @@ export function TripDetailScreen({ route }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.summary}>
-        <Text style={styles.dest}>{trip.destination || trip.title}</Text>
-        <Text style={styles.dates}>{trip.start_date} ~ {trip.end_date}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dest}>{trip.destination || trip.title}</Text>
+          <Text style={styles.dates}>{trip.start_date} ~ {trip.end_date}</Text>
+        </View>
+        <TouchableOpacity style={styles.shareBtn} onPress={() => setShowMembers(true)}>
+          <Text style={styles.shareText}>👥 공유</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.tabBar}>
@@ -53,6 +60,8 @@ export function TripDetailScreen({ route }: Props) {
         {tab === "budget" && <BudgetTab tripId={tripId} canEdit={canEdit} currency={trip.currency} />}
         {tab === "checklist" && <ChecklistTab tripId={tripId} canEdit={canEdit} />}
       </View>
+
+      <MembersModal tripId={tripId} canEdit={canEdit} visible={showMembers} onClose={() => setShowMembers(false)} />
     </View>
   );
 }
@@ -60,9 +69,11 @@ export function TripDetailScreen({ route }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg },
-  summary: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  summary: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
   dest: { fontSize: 22, fontWeight: "800", color: Colors.text },
   dates: { fontSize: 14, color: Colors.textSub, marginTop: 4 },
+  shareBtn: { backgroundColor: Colors.bgCardAlt, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  shareText: { fontSize: 14, fontWeight: "600", color: Colors.accentDeep },
   tabBar: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.bgCard },
   tabItem: { flex: 1, alignItems: "center", paddingVertical: 13 },
   tabLabel: { fontSize: 15, color: Colors.textMuted, fontWeight: "600" },
