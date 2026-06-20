@@ -65,6 +65,7 @@ export type PlaceSearchResult = {
   lat: number | null;
   lng: number | null;
   rating?: number;
+  types?: string[];
 };
 
 export type Expense = {
