@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { tripApi } from "../services/api";
 import { Colors } from "../constants/colors";
 import { ItineraryTab } from "./trip/ItineraryTab";
+import { MapTab } from "./trip/MapTab";
 import { BudgetTab } from "./trip/BudgetTab";
 import { ChecklistTab } from "./trip/ChecklistTab";
 import { MembersModal } from "./trip/MembersModal";
@@ -15,6 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "TripDetail">;
 
 const TABS = [
   { key: "itinerary", label: "일정" },
+  { key: "map", label: "지도" },
   { key: "budget", label: "예산" },
   { key: "checklist", label: "준비물" },
 ] as const;
@@ -57,6 +59,7 @@ export function TripDetailScreen({ route }: Props) {
 
       <View style={{ flex: 1 }}>
         {tab === "itinerary" && <ItineraryTab trip={trip} canEdit={canEdit} />}
+        {tab === "map" && <MapTab tripId={tripId} />}
         {tab === "budget" && <BudgetTab tripId={tripId} canEdit={canEdit} currency={trip.currency} />}
         {tab === "checklist" && <ChecklistTab tripId={tripId} canEdit={canEdit} />}
       </View>
