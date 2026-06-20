@@ -195,7 +195,15 @@ export type DirectionsResult = {
   options?: TransitOption[];
 };
 
-export type TransitStep = { line: string; from_time: string; to_time: string; from_name: string; to_name: string };
+export type TransitStep = {
+  mode: "walk" | "transit";
+  line: string;
+  from_time: string;
+  to_time: string;
+  from_name: string;
+  to_name: string;
+  duration_text: string | null;
+};
 export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[] };
 
 export const mapsApi = {

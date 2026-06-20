@@ -52,6 +52,15 @@ _LINE_KO: list[tuple[str, str]] = [
 ]
 
 
+def _clean_pt(name: str) -> str:
+    """지점 이름 정리: NAVITIME의 start/goal → 한글."""
+    if name == "start":
+        return "출발지"
+    if name == "goal":
+        return "도착지"
+    return name
+
+
 def _line_label(jp: str) -> str:
     """'한글 (일본어)'. 매핑 없으면 일본어만."""
     if not jp:
@@ -89,22 +98,36 @@ def _parse_item(it: dict) -> dict:
     mv = it.get("summary", {}).get("move", {})
     minutes = mv.get("time")
     fare = _fare(mv)
+    sections = it.get("sections", [])
     steps = []
-    for s in it.get("sections", []):
-        if s.get("type") == "move" and s.get("move") != "walk":
-            steps.append({
-                "line": _line_label(s.get("line_name") or ""),
-                "from_time": _hhmm(s.get("from_time", "")),
-                "to_time": _hhmm(s.get("to_time", "")),
-                "from_name": s.get("from_name", ""),
-                "to_name": s.get("to_name", ""),
-            })
+    # 실제 이동은 '도보 → 전철 → 도보' 처럼 구성됨. 도보 구간도 모두 포함한다.
+    # 역/지점 이름은 인접한 point 섹션에서 가져옴.
+    for i, s in enumerate(sections):
+        if s.get("type") != "move":
+            continue
+        prev_pt = sections[i - 1] if i > 0 and sections[i - 1].get("type") == "point" else {}
+        next_pt = sections[i + 1] if i + 1 < len(sections) and sections[i + 1].get("type") == "point" else {}
+        is_walk = s.get("move") == "walk"
+        smin = s.get("time")
+        steps.append({
+            "mode": "walk" if is_walk else "transit",
+            # 전철인데 노선명 매핑이 없으면 빈 문자열 대신 '전철'
+            "line": "" if is_walk else (_line_label(s.get("line_name") or "") or "전철"),
+            "from_time": _hhmm(s.get("from_time", "")),
+            "to_time": _hhmm(s.get("to_time", "")),
+            "from_name": _clean_pt(prev_pt.get("name", "")),
+            "to_name": _clean_pt(next_pt.get("name", "")),
+            "duration_text": f"{smin}분" if smin else None,
+        })
+    # 출발/도착은 전체 여정 기준(맨 앞 도보 시작 ~ 맨 뒤 도보 끝)
+    depart = _hhmm(mv.get("from_time", "")) or (steps[0]["from_time"] if steps else "")
+    arrive = _hhmm(mv.get("to_time", "")) or (steps[-1]["to_time"] if steps else "")
     return {
         "duration_text": f"{minutes}분" if minutes else None,
         "fare_text": f"{int(fare):,}엔" if fare else None,
         "transfers": mv.get("transit_count", 0),
-        "depart": steps[0]["from_time"] if steps else _hhmm(mv.get("from_time", "")),
-        "arrive": steps[-1]["to_time"] if steps else _hhmm(mv.get("to_time", "")),
+        "depart": depart,
+        "arrive": arrive,
         "steps": steps,
     }
 
@@ -140,6 +163,6 @@ async def transit_route(origin: str, destination: str, depart: str | None = None
         "fare_text": best["fare_text"],
         "mode": "transit",
         "no_route": best["duration_text"] is None,
-        "transit_lines": [s["line"] for s in best["steps"]],
+        "transit_lines": [s["line"] for s in best["steps"] if s["mode"] == "transit"],
         "options": options,
     }
