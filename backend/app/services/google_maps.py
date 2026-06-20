@@ -4,6 +4,8 @@
 노출되지 않는다. 여기서는 Places API / Directions API 의 classic REST 엔드포인트를 사용.
 (키 발급 시 'Places API'와 'Directions API'를 활성화해야 함.)
 """
+import time
+
 import httpx
 
 from app.core.config import settings
@@ -90,14 +92,22 @@ async def directions(origin: str, destination: str, mode: str = "transit", langu
         "language": language,
         "key": key,
     }
+    # 대중교통은 departure_time 이 있어야 경로가 안정적으로 나온다 (없으면 ZERO_RESULTS 빈발)
+    if mode == "transit":
+        params["departure_time"] = int(time.time())
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         resp = await client.get(_DIRECTIONS, params=params)
     data = resp.json()
-    if data.get("status") != "OK":
-        raise GoogleMapsError(f"Directions 실패: {data.get('status')}")
+    status = data.get("status")
+    # 경로 없음은 에러가 아니라 "경로 없음" 결과로 반환
+    if status == "ZERO_RESULTS":
+        return {"distance_m": None, "duration_s": None, "duration_text": None,
+                "distance_text": None, "summary": "", "mode": mode, "no_route": True}
+    if status != "OK":
+        raise GoogleMapsError(f"Directions 실패: {status} {data.get('error_message', '')}")
     routes = data.get("routes", [])
     if not routes:
-        return {"distance_m": None, "duration_s": None, "summary": "", "mode": mode}
+        return {"distance_m": None, "duration_s": None, "summary": "", "mode": mode, "no_route": True}
     leg = routes[0]["legs"][0]
     return {
         "distance_m": leg.get("distance", {}).get("value"),

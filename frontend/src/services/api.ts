@@ -49,6 +49,7 @@ export type Place = {
   day_index: number | null;
   order_index: number;
   name: string;
+  google_place_id: string | null;
   address: string;
   category: string;
   planned_time: string;
@@ -88,6 +89,11 @@ export type ChecklistItem = {
   text: string;
   is_done: boolean;
   order_index: number;
+};
+
+export type Member = {
+  user: { id: number; email: string; name: string };
+  role: "owner" | "editor" | "viewer";
 };
 
 // ── Auth ──────────────────────────────────────────────
@@ -150,6 +156,13 @@ export const checklistApi = {
     request<ChecklistItem>(`/trips/${tripId}/checklist/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (tripId: number, id: number) =>
     request<void>(`/trips/${tripId}/checklist/${id}`, { method: "DELETE" }),
+};
+
+// ── Members (공유) ────────────────────────────────────
+export const memberApi = {
+  list: (tripId: number) => request<Member[]>(`/trips/${tripId}/members`),
+  invite: (tripId: number, email: string, role: "editor" | "viewer") =>
+    request<Member>(`/trips/${tripId}/invite`, { method: "POST", body: JSON.stringify({ email, role }) }),
 };
 
 // ── Maps (백엔드 프록시) ───────────────────────────────

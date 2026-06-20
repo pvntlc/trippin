@@ -1,9 +1,11 @@
-import React, { useMemo } from "react";
-import { View, Text, SectionList, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
 import { placeApi, type Place, type Trip } from "../../services/api";
 import { Colors } from "../../constants/colors";
+import { PlaceSearchModal } from "./PlaceSearchModal";
+import { PlaceEditModal } from "./PlaceEditModal";
 
 function daysBetween(start: string, end: string): number {
   const s = new Date(start).getTime();
@@ -12,15 +14,18 @@ function daysBetween(start: string, end: string): number {
   return Math.max(1, Math.round((e - s) / 86400000) + 1);
 }
 
-export function ItineraryTab({ trip }: { trip: Trip }) {
+export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }) {
   const tripId = trip.id;
+  const [showSearch, setShowSearch] = useState(false);
+  const [editing, setEditing] = useState<Place | null>(null);
+  const dayCount = daysBetween(trip.start_date, trip.end_date);
+
   const { data: places, isLoading } = useQuery({
     queryKey: ["places", tripId],
     queryFn: () => placeApi.list(tripId),
   });
 
   const sections = useMemo(() => {
-    const dayCount = daysBetween(trip.start_date, trip.end_date);
     const byDay: Record<string, Place[]> = {};
     (places ?? []).forEach((p) => {
       const key = p.day_index === null ? "wishlist" : String(p.day_index);
@@ -41,27 +46,43 @@ export function ItineraryTab({ trip }: { trip: Trip }) {
   }
 
   return (
-    <SectionList
-      style={styles.container}
-      sections={sections}
-      keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-      stickySectionHeadersEnabled={false}
-      renderSectionHeader={({ section }) => <Text style={styles.dayHeader}>{section.title}</Text>}
-      renderSectionFooter={({ section }) =>
-        section.data.length === 0 ? <Text style={styles.emptyDay}>일정 없음 — 장소를 추가해 보세요</Text> : null
-      }
-      renderItem={({ item }) => (
-        <View style={styles.placeCard}>
-          {!!item.planned_time && <Text style={styles.time}>{item.planned_time}</Text>}
-          <View style={{ flex: 1 }}>
-            <Text style={styles.placeName}>{item.name}</Text>
-            {!!item.address && <Text style={styles.placeAddr}>{item.address}</Text>}
-          </View>
-          {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
-        </View>
+    <View style={styles.container}>
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ padding: 16, paddingBottom: 90 }}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => <Text style={styles.dayHeader}>{section.title}</Text>}
+        renderSectionFooter={({ section }) =>
+          section.data.length === 0 ? <Text style={styles.emptyDay}>일정 없음 — 장소를 추가해 보세요</Text> : null
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.placeCard}
+            onPress={() => canEdit && setEditing(item)}
+            disabled={!canEdit}
+            activeOpacity={canEdit ? 0.6 : 1}
+          >
+            {!!item.planned_time && <Text style={styles.time}>{item.planned_time}</Text>}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.placeName}>{item.name}</Text>
+              {!!item.address && <Text style={styles.placeAddr}>{item.address}</Text>}
+              {!!item.note && <Text style={styles.placeNote}>📝 {item.note}</Text>}
+            </View>
+            {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
+          </TouchableOpacity>
+        )}
+      />
+
+      {canEdit && (
+        <TouchableOpacity style={styles.fab} onPress={() => setShowSearch(true)}>
+          <Text style={styles.fabText}>🔍 장소 검색·추가</Text>
+        </TouchableOpacity>
       )}
-    />
+
+      <PlaceSearchModal tripId={tripId} dayCount={dayCount} visible={showSearch} onClose={() => setShowSearch(false)} />
+      <PlaceEditModal tripId={tripId} place={editing} dayCount={dayCount} onClose={() => setEditing(null)} />
+    </View>
   );
 }
 
@@ -74,5 +95,8 @@ const styles = StyleSheet.create({
   time: { fontSize: 13, fontWeight: "700", color: Colors.accent, width: 44 },
   placeName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   placeAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  placeNote: { fontSize: 12, color: Colors.textSub, marginTop: 4 },
   tag: { fontSize: 11, color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  fab: { position: "absolute", left: 16, right: 16, bottom: 20, backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 15, alignItems: "center", elevation: 4 },
+  fabText: { color: Colors.white, fontSize: 16, fontWeight: "700" },
 });

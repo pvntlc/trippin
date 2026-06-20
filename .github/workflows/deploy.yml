@@ -37,10 +37,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Build frontend (Expo web)
         env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.PUBLIC_API_URL }}
+          EXPO_PUBLIC_API_URL:         ${{ secrets.PUBLIC_API_URL }}
+          EXPO_PUBLIC_GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           cd frontend
           echo "EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}" > .env
+          echo "EXPO_PUBLIC_GOOGLE_MAPS_KEY=${EXPO_PUBLIC_GOOGLE_MAPS_KEY}" >> .env
           npm ci
           npx expo export --platform web
       - name: Package frontend dist
@@ -66,7 +68,7 @@ jobs:
           source:   "frontend-dist.tar.gz"
           target:   "/home/${{ secrets.OCI_USER }}/"
 
-      # ── 4) 코드 배포 + 서비스 재시작 ────────────────────────
+      # ── 4) 코드 배포 + 프론트 정적파일 배치 + 서비스 재시작 ──
       - name: Deploy and restart
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -88,18 +90,15 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt --quiet
             python -c "import asyncio; from app.core.database import init_db; asyncio.run(init_db()); print('DB OK')"
+
+            echo "=== 프론트엔드 정적파일 배치 (backend/web) ==="
+            rm -rf web && mkdir -p web
+            tar -xzf ~/frontend-dist.tar.gz -C web
+            rm -f ~/frontend-dist.tar.gz
             cd ~
 
-            echo "=== 프론트엔드 배포 ==="
-            sudo mkdir -p /var/www/trippin
-            sudo tar -xzf ~/frontend-dist.tar.gz -C /var/www/trippin
-            sudo chown -R www-data:www-data /var/www/trippin
-            rm -f ~/frontend-dist.tar.gz
-
-            echo "=== nginx + 서비스 재시작 ==="
-            sudo cp ~/trippin/deploy/nginx.conf /etc/nginx/sites-available/trippin
-            sudo ln -sf /etc/nginx/sites-available/trippin /etc/nginx/sites-enabled/trippin
-            sudo nginx -t && sudo systemctl reload nginx
+            echo "=== 서비스 재시작 ==="
             sudo systemctl restart trippin
             sleep 4
-            sudo systemctl is-active trippin && echo "trippin 서비스 정상 실행 중"
+            sudo systemctl is-active trippin && echo "trippin 서비스 정상 (포트 8002)"
+            curl -fsS http://127.0.0.1:8002/health && echo " <- health OK"
