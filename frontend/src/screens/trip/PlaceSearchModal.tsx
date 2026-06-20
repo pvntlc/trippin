@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult } from "../../services/api";
@@ -52,7 +52,8 @@ export function PlaceSearchModal({
   });
 
   const searchMut = useMutation({
-    mutationFn: () => mapsApi.search(q.trim()),
+    // 여행앱이므로 검색어에 목적지를 결합해 현지 결과 우선 (예: "이치란" → "이치란 도쿄")
+    mutationFn: () => mapsApi.search(destination ? `${q.trim()} ${destination}` : q.trim()),
     onSuccess: (r) => { setSearchResults(r.results); setSearched(true); },
   });
 
@@ -91,6 +92,13 @@ export function PlaceSearchModal({
 
   const list = (isSearchMode ? searchResults : recData?.results ?? []).filter(isRealPlace);
   const loading = isSearchMode ? searchMut.isPending : recLoading;
+
+  // 갤러리: 검색결과 사진(즉시) + 상세 사진들(요약과 함께 로드), 중복 제거
+  const galleryRefs: string[] = [];
+  if (picked) {
+    if (picked.place.photo_reference) galleryRefs.push(picked.place.photo_reference);
+    (summary?.photos ?? []).forEach((r) => { if (r && !galleryRefs.includes(r)) galleryRefs.push(r); });
+  }
 
   const renderResults = () => (
     <>
@@ -179,9 +187,14 @@ export function PlaceSearchModal({
           ) : (
             <>
               <View style={styles.pickedBox}>
-                {placePhotoUrl(picked.place.photo_reference, 600) && (
-                  <Image source={{ uri: placePhotoUrl(picked.place.photo_reference, 600)! }} style={styles.hero} resizeMode="cover" />
+                {galleryRefs.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gallery} contentContainerStyle={{ gap: 8 }}>
+                    {galleryRefs.map((ref, i) => (
+                      <Image key={`${ref}-${i}`} source={{ uri: placePhotoUrl(ref, 600)! }} style={styles.galleryImg} resizeMode="cover" />
+                    ))}
+                  </ScrollView>
                 )}
+                {galleryRefs.length > 1 && <Text style={styles.galleryHint}>← 사진 {galleryRefs.length}장 (밀어서 보기)</Text>}
                 <Text style={styles.resultName}>{picked.place.name}</Text>
                 <View style={styles.metaRow}>
                   <Text style={styles.typeChip}>{placeTypeLabel(picked.place.types)}</Text>
@@ -250,7 +263,9 @@ const styles = StyleSheet.create({
   thumb: { width: 52, height: 52, borderRadius: 10, backgroundColor: Colors.bgCardAlt },
   thumbEmpty: { alignItems: "center", justifyContent: "center" },
   thumbIcon: { fontSize: 22 },
-  hero: { width: "100%", height: 160, borderRadius: 12, marginBottom: 12, backgroundColor: Colors.bgCard },
+  gallery: { marginBottom: 6 },
+  galleryImg: { width: 240, height: 160, borderRadius: 12, backgroundColor: Colors.bgCard },
+  galleryHint: { fontSize: 11, color: Colors.textMuted, marginBottom: 10 },
   resultName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   resultAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   rating: { fontSize: 13, color: Colors.accentDeep, fontWeight: "600" },

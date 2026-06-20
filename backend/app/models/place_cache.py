@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, Float, Integer, Text
+from sqlalchemy import String, DateTime, Float, Integer, Text  # noqa: F401
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -20,4 +20,6 @@ class PlaceReviewCache(Base):
     user_ratings_total: Mapped[int] = mapped_column(Integer, default=0)
     review_summary: Mapped[str] = mapped_column(Text, default="")
     review_count_used: Mapped[int] = mapped_column(Integer, default=0)
+    # 사진 photo_reference 들을 JSON 배열 문자열로 저장
+    photo_refs: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

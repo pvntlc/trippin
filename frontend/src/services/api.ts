@@ -180,6 +180,7 @@ export type PlaceSummary = {
   user_ratings_total: number;
   review_summary: string;
   review_count_used: number;
+  photos: string[];
 };
 
 export const mapsApi = {
