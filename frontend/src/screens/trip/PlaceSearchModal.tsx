@@ -37,13 +37,13 @@ export function PlaceSearchModal({
   const [q, setQ] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
   const [searched, setSearched] = useState(false);
-  const [recCat, setRecCat] = useState(0); // REC_CATS 인덱스
-  const [picked, setPicked] = useState<{ place: PlaceSearchResult; category: string } | null>(null);
+  const [recCat, setRecCat] = useState(0);
+  // 펼쳐진(선택된) 장소
+  const [open, setOpen] = useState<{ place: PlaceSearchResult; category: string } | null>(null);
 
   const isSearchMode = q.trim() !== "";
   const cat = REC_CATS[recCat];
 
-  // 목적지 기준 추천 (검색어 없을 때 자동)
   const { data: recData, isFetching: recLoading } = useQuery({
     queryKey: ["recommend", destination, cat.term],
     queryFn: () => mapsApi.search(`${cat.term} ${destination}`),
@@ -54,14 +54,14 @@ export function PlaceSearchModal({
   const searchMut = useMutation({
     // 여행앱이므로 검색어에 목적지를 결합해 현지 결과 우선 (예: "이치란" → "이치란 도쿄")
     mutationFn: () => mapsApi.search(destination ? `${q.trim()} ${destination}` : q.trim()),
-    onSuccess: (r) => { setSearchResults(r.results); setSearched(true); },
+    onSuccess: (r) => { setSearchResults(r.results); setSearched(true); setOpen(null); },
   });
 
-  // 선택한 장소의 리뷰 AI 요약 (분류·평점은 검색 결과에 이미 있음)
+  // 펼친 장소의 리뷰 요약 + 사진 (분류·평점은 검색 결과에 이미 있음)
   const { data: summary, isFetching: summaryLoading } = useQuery({
-    queryKey: ["placeSummary", picked?.place.google_place_id],
-    queryFn: () => mapsApi.placeSummary(picked!.place.google_place_id),
-    enabled: !!picked,
+    queryKey: ["placeSummary", open?.place.google_place_id],
+    queryFn: () => mapsApi.placeSummary(open!.place.google_place_id),
+    enabled: !!open,
     staleTime: 10 * 60_000,
   });
 
@@ -83,7 +83,10 @@ export function PlaceSearchModal({
     },
   });
 
-  const reset = () => { setQ(""); setSearchResults([]); setSearched(false); setPicked(null); };
+  const reset = () => { setQ(""); setSearchResults([]); setSearched(false); setOpen(null); };
+
+  const toggle = (item: PlaceSearchResult, category: string) =>
+    setOpen((prev) => (prev?.place.google_place_id === item.google_place_id ? null : { place: item, category }));
 
   const dayOptions: { label: string; value: number | null }[] = [
     ...Array.from({ length: dayCount }, (_, i) => ({ label: `Day ${i + 1}`, value: i as number | null })),
@@ -93,63 +96,54 @@ export function PlaceSearchModal({
   const list = (isSearchMode ? searchResults : recData?.results ?? []).filter(isRealPlace);
   const loading = isSearchMode ? searchMut.isPending : recLoading;
 
-  // 갤러리: 검색결과 사진(즉시) + 상세 사진들(요약과 함께 로드), 중복 제거
-  const galleryRefs: string[] = [];
-  if (picked) {
-    if (picked.place.photo_reference) galleryRefs.push(picked.place.photo_reference);
-    (summary?.photos ?? []).forEach((r) => { if (r && !galleryRefs.includes(r)) galleryRefs.push(r); });
-  }
+  // 펼친 장소 갤러리: 검색 사진(즉시) + 상세 사진들(요약과 함께), 중복 제거
+  const galleryRefs = (place: PlaceSearchResult): string[] => {
+    const refs: string[] = [];
+    if (place.photo_reference) refs.push(place.photo_reference);
+    (summary?.photos ?? []).forEach((r) => { if (r && !refs.includes(r)) refs.push(r); });
+    return refs;
+  };
 
-  const renderResults = () => (
-    <>
-      {!isSearchMode && !!destination && (
-        <View style={styles.recChips}>
-          {REC_CATS.map((c, i) => (
-            <TouchableOpacity key={c.label} style={[styles.recChip, recCat === i && styles.recChipOn]} onPress={() => setRecCat(i)}>
-              <Text style={[styles.recChipText, recCat === i && styles.recChipTextOn]}>{c.label}</Text>
+  const renderDetail = (item: PlaceSearchResult, category: string) => {
+    const refs = galleryRefs(item);
+    return (
+      <View style={styles.detail}>
+        {refs.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginBottom: refs.length > 1 ? 4 : 10 }}>
+            {refs.map((ref, i) => (
+              <Image key={`${ref}-${i}`} source={{ uri: placePhotoUrl(ref, 600)! }} style={styles.galleryImg} resizeMode="cover" />
+            ))}
+          </ScrollView>
+        )}
+        {refs.length > 1 && <Text style={styles.galleryHint}>← 사진 {refs.length}장 (밀어서 보기)</Text>}
+
+        <View style={styles.summaryBox}>
+          <Text style={styles.summaryLabel}>🤖 리뷰 요약</Text>
+          {summaryLoading ? (
+            <Text style={styles.summaryLoading}>리뷰를 요약하는 중…</Text>
+          ) : summary?.review_summary ? (
+            <Text style={styles.summaryText}>{summary.review_summary}</Text>
+          ) : (
+            <Text style={styles.summaryLoading}>요약할 리뷰가 없어요.</Text>
+          )}
+        </View>
+
+        <Text style={styles.dayPrompt}>어느 날 일정에 넣을까요?</Text>
+        <View style={styles.dayGrid}>
+          {dayOptions.map((d) => (
+            <TouchableOpacity
+              key={String(d.value)}
+              style={styles.dayBtn}
+              onPress={() => addMut.mutate({ place: item, dayIndex: d.value, category })}
+              disabled={addMut.isPending}
+            >
+              <Text style={styles.dayBtnText}>{d.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
-      )}
-
-      {loading ? (
-        <ActivityIndicator color={Colors.accent} style={{ marginVertical: 24 }} />
-      ) : (
-        <FlatList
-          data={list}
-          keyExtractor={(r) => r.google_place_id}
-          style={{ maxHeight: 380 }}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <Text style={styles.empty}>
-              {isSearchMode
-                ? (searched ? "결과가 없어요." : "")
-                : (destination ? "추천 결과가 없어요." : "목적지를 설정하면 추천이 떠요. 위에서 검색해 보세요.")}
-            </Text>
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.resultRow}
-              onPress={() => setPicked({ place: item, category: isSearchMode ? "" : cat.category })}
-            >
-              {placePhotoUrl(item.photo_reference, 120) ? (
-                <Image source={{ uri: placePhotoUrl(item.photo_reference, 120)! }} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbEmpty]}><Text style={styles.thumbIcon}>📍</Text></View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.resultName}>{item.name}</Text>
-                <Text style={styles.resultAddr} numberOfLines={1}>
-                  {placeTypeLabel(item.types)} · {item.address}
-                </Text>
-              </View>
-              {item.rating != null && <Text style={styles.rating}>★ {item.rating}</Text>}
-            </TouchableOpacity>
-          )}
-        />
-      )}
-    </>
-  );
+      </View>
+    );
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -157,84 +151,78 @@ export function PlaceSearchModal({
         <View style={styles.card}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>
-              {picked ? "어느 날에 넣을까요?" : isSearchMode ? "장소 검색" : destination ? `📍 ${destination} 추천` : "장소 검색"}
+              {isSearchMode ? "장소 검색" : destination ? `📍 ${destination} 추천` : "장소 검색"}
             </Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}><Text style={styles.close}>닫기</Text></TouchableOpacity>
           </View>
 
-          {!picked ? (
-            <>
-              <View style={styles.searchRow}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="직접 검색 (예: 도톤보리, 우메다 스카이빌딩)"
-                  value={q}
-                  onChangeText={(t) => { setQ(t); setSearched(false); }}
-                  placeholderTextColor={Colors.textMuted}
-                  onSubmitEditing={() => q.trim() && searchMut.mutate()}
-                  returnKeyType="search"
-                />
-                <TouchableOpacity
-                  style={[styles.searchBtn, !q.trim() && styles.btnOff]}
-                  onPress={() => q.trim() && searchMut.mutate()}
-                  disabled={!q.trim() || searchMut.isPending}
-                >
-                  <Text style={styles.searchBtnText}>검색</Text>
-                </TouchableOpacity>
-              </View>
-              {renderResults()}
-            </>
-          ) : (
-            <>
-              <View style={styles.pickedBox}>
-                {galleryRefs.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gallery} contentContainerStyle={{ gap: 8 }}>
-                    {galleryRefs.map((ref, i) => (
-                      <Image key={`${ref}-${i}`} source={{ uri: placePhotoUrl(ref, 600)! }} style={styles.galleryImg} resizeMode="cover" />
-                    ))}
-                  </ScrollView>
-                )}
-                {galleryRefs.length > 1 && <Text style={styles.galleryHint}>← 사진 {galleryRefs.length}장 (밀어서 보기)</Text>}
-                <Text style={styles.resultName}>{picked.place.name}</Text>
-                <View style={styles.metaRow}>
-                  <Text style={styles.typeChip}>{placeTypeLabel(picked.place.types)}</Text>
-                  {(summary?.rating ?? picked.place.rating) != null && (
-                    <Text style={styles.ratingMeta}>
-                      ★ {summary?.rating ?? picked.place.rating}
-                      {!!summary?.user_ratings_total && ` (${summary.user_ratings_total.toLocaleString()})`}
-                    </Text>
-                  )}
-                </View>
-                <Text style={styles.resultAddr} numberOfLines={2}>{picked.place.address}</Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="직접 검색 (예: 도톤보리, 우메다 스카이빌딩)"
+              value={q}
+              onChangeText={(t) => { setQ(t); setSearched(false); }}
+              placeholderTextColor={Colors.textMuted}
+              onSubmitEditing={() => q.trim() && searchMut.mutate()}
+              returnKeyType="search"
+            />
+            <TouchableOpacity
+              style={[styles.searchBtn, !q.trim() && styles.btnOff]}
+              onPress={() => q.trim() && searchMut.mutate()}
+              disabled={!q.trim() || searchMut.isPending}
+            >
+              <Text style={styles.searchBtnText}>검색</Text>
+            </TouchableOpacity>
+          </View>
 
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryLabel}>🤖 리뷰 요약</Text>
-                  {summaryLoading ? (
-                    <Text style={styles.summaryLoading}>리뷰를 요약하는 중…</Text>
-                  ) : summary?.review_summary ? (
-                    <Text style={styles.summaryText}>{summary.review_summary}</Text>
-                  ) : (
-                    <Text style={styles.summaryLoading}>요약할 리뷰가 없어요.</Text>
-                  )}
-                </View>
-              </View>
-              <Text style={styles.dayPrompt}>어느 날 일정에 넣을까요?</Text>
-              <View style={styles.dayGrid}>
-                {dayOptions.map((d) => (
-                  <TouchableOpacity
-                    key={String(d.value)}
-                    style={styles.dayBtn}
-                    onPress={() => addMut.mutate({ place: picked.place, dayIndex: d.value, category: picked.category })}
-                    disabled={addMut.isPending}
-                  >
-                    <Text style={styles.dayBtnText}>{d.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity onPress={() => setPicked(null)}>
-                <Text style={styles.back}>← 돌아가기</Text>
-              </TouchableOpacity>
-            </>
+          {!isSearchMode && !!destination && (
+            <View style={styles.recChips}>
+              {REC_CATS.map((c, i) => (
+                <TouchableOpacity key={c.label} style={[styles.recChip, recCat === i && styles.recChipOn]} onPress={() => { setRecCat(i); setOpen(null); }}>
+                  <Text style={[styles.recChipText, recCat === i && styles.recChipTextOn]}>{c.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {loading ? (
+            <ActivityIndicator color={Colors.accent} style={{ marginVertical: 24 }} />
+          ) : (
+            <FlatList
+              data={list}
+              keyExtractor={(r) => r.google_place_id}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.empty}>
+                  {isSearchMode
+                    ? (searched ? "결과가 없어요." : "")
+                    : (destination ? "추천 결과가 없어요." : "목적지를 설정하면 추천이 떠요. 위에서 검색해 보세요.")}
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const itemCat = isSearchMode ? "" : cat.category;
+                const isOpen = open?.place.google_place_id === item.google_place_id;
+                return (
+                  <View style={[styles.itemWrap, isOpen && styles.itemWrapOpen]}>
+                    <TouchableOpacity style={styles.resultRow} onPress={() => toggle(item, itemCat)}>
+                      {placePhotoUrl(item.photo_reference, 120) ? (
+                        <Image source={{ uri: placePhotoUrl(item.photo_reference, 120)! }} style={styles.thumb} />
+                      ) : (
+                        <View style={[styles.thumb, styles.thumbEmpty]}><Text style={styles.thumbIcon}>📍</Text></View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.resultName}>{item.name}</Text>
+                        <Text style={styles.resultAddr} numberOfLines={1}>
+                          {placeTypeLabel(item.types)} · {item.address}
+                        </Text>
+                      </View>
+                      {item.rating != null && <Text style={styles.rating}>★ {item.rating}</Text>}
+                    </TouchableOpacity>
+                    {isOpen && renderDetail(item, itemCat)}
+                  </View>
+                );
+              }}
+            />
           )}
         </View>
       </View>
@@ -244,7 +232,7 @@ export function PlaceSearchModal({
 
 const styles = StyleSheet.create({
   bg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  card: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28, maxHeight: "85%" },
+  card: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28, maxHeight: "88%" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   title: { fontSize: 18, fontWeight: "700", color: Colors.text },
   close: { color: Colors.textMuted, fontSize: 14 },
@@ -259,27 +247,25 @@ const styles = StyleSheet.create({
   recChipText: { color: Colors.textSub, fontSize: 13, fontWeight: "600" },
   recChipTextOn: { color: Colors.white },
   empty: { textAlign: "center", color: Colors.textMuted, marginVertical: 24, paddingHorizontal: 20, lineHeight: 20 },
-  resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  itemWrap: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  itemWrapOpen: { backgroundColor: Colors.bgCardAlt, borderRadius: 12, marginVertical: 4, borderBottomWidth: 0 },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 4 },
   thumb: { width: 52, height: 52, borderRadius: 10, backgroundColor: Colors.bgCardAlt },
   thumbEmpty: { alignItems: "center", justifyContent: "center" },
   thumbIcon: { fontSize: 22 },
-  gallery: { marginBottom: 6 },
-  galleryImg: { width: 240, height: 160, borderRadius: 12, backgroundColor: Colors.bgCard },
-  galleryHint: { fontSize: 11, color: Colors.textMuted, marginBottom: 10 },
   resultName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   resultAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   rating: { fontSize: 13, color: Colors.accentDeep, fontWeight: "600" },
-  pickedBox: { backgroundColor: Colors.bgCardAlt, borderRadius: 12, padding: 14, marginBottom: 14 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
-  typeChip: { fontSize: 12, fontWeight: "700", color: Colors.white, backgroundColor: Colors.accent, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
-  ratingMeta: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },
-  summaryBox: { marginTop: 12, backgroundColor: Colors.bgCard, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border },
+  // 펼침 상세
+  detail: { paddingHorizontal: 8, paddingBottom: 14 },
+  galleryImg: { width: 220, height: 150, borderRadius: 12, backgroundColor: Colors.bgCard },
+  galleryHint: { fontSize: 11, color: Colors.textMuted, marginBottom: 10 },
+  summaryBox: { backgroundColor: Colors.bgCard, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border },
   summaryLabel: { fontSize: 12, fontWeight: "700", color: Colors.textSub, marginBottom: 6 },
   summaryText: { fontSize: 14, color: Colors.text, lineHeight: 21 },
   summaryLoading: { fontSize: 13, color: Colors.textMuted },
-  dayPrompt: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginBottom: 10 },
-  dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  dayBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  dayPrompt: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 14, marginBottom: 8 },
+  dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dayBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   dayBtnText: { color: Colors.white, fontWeight: "700", fontSize: 14 },
-  back: { color: Colors.accentDeep, fontSize: 14 },
 });
