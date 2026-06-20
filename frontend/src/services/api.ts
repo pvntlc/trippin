@@ -183,6 +183,8 @@ export type PlaceSummary = {
   photos: string[];
 };
 
+export type LatLngTuple = [number, number]; // [lat, lng]
+
 export type DirectionsResult = {
   distance_m?: number | null;
   distance_text?: string | null;
@@ -193,6 +195,7 @@ export type DirectionsResult = {
   transit_lines?: string[];
   fare_text?: string | null;
   options?: TransitOption[];
+  polyline?: LatLngTuple[];
 };
 
 export type TransitStep = {
@@ -204,7 +207,7 @@ export type TransitStep = {
   to_name: string;
   duration_text: string | null;
 };
-export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[] };
+export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[]; shape?: LatLngTuple[] };
 
 export const mapsApi = {
   search: (q: string) =>

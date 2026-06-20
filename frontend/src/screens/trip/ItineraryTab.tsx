@@ -62,13 +62,25 @@ function sortByTime(arr: Place[]): Place[] {
 
 type Section = { title: string; date: string; dayIndex: number | null; data: Place[] };
 
-export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }) {
+export function ItineraryTab({
+  trip,
+  canEdit,
+  legModes,
+  setLegModes,
+  transitChoices,
+  setTransitChoices,
+}: {
+  trip: Trip;
+  canEdit: boolean;
+  legModes: Record<string, LegMode>;
+  setLegModes: React.Dispatch<React.SetStateAction<Record<string, LegMode>>>;
+  transitChoices: Record<string, TransitOption>;
+  setTransitChoices: React.Dispatch<React.SetStateAction<Record<string, TransitOption>>>;
+}) {
   const tripId = trip.id;
   const [showSearch, setShowSearch] = useState(false);
   const [searchDay, setSearchDay] = useState<number | null | undefined>(undefined);
   const [editing, setEditing] = useState<Place | null>(null);
-  const [legModes, setLegModes] = useState<Record<string, LegMode>>({});
-  const [transitChoices, setTransitChoices] = useState<Record<string, TransitOption>>({});
   const [transitModal, setTransitModal] = useState<{ from: Place; to: Place; key: string } | null>(null);
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 

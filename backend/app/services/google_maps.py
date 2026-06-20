@@ -128,6 +128,32 @@ def _parse_latlng(s: str) -> dict:
     return {"location": {"latLng": {"latitude": float(lat), "longitude": float(lng)}}}
 
 
+def _decode_polyline(encoded: str) -> list[list[float]]:
+    """Google encoded polyline → [[lat,lng], ...]."""
+    if not encoded:
+        return []
+    points: list[list[float]] = []
+    index = lat = lng = 0
+    length = len(encoded)
+    while index < length:
+        for is_lng in (False, True):
+            result = shift = 0
+            while True:
+                b = ord(encoded[index]) - 63
+                index += 1
+                result |= (b & 0x1F) << shift
+                shift += 5
+                if b < 0x20:
+                    break
+            d = ~(result >> 1) if result & 1 else (result >> 1)
+            if is_lng:
+                lng += d
+            else:
+                lat += d
+        points.append([lat / 1e5, lng / 1e5])
+    return points
+
+
 async def directions(origin: str, destination: str, mode: str = "walking", language: str = "ko", depart: str | None = None) -> dict:
     """두 지점('lat,lng') 간 경로/소요시간 — Routes API.
 
@@ -155,7 +181,7 @@ async def directions(origin: str, destination: str, mode: str = "walking", langu
         body["departureTime"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 120))
 
     field_mask = (
-        "routes.duration,routes.distanceMeters,"
+        "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,"
         "routes.legs.steps.travelMode,"
         "routes.legs.steps.transitDetails.transitLine.nameShort,"
         "routes.legs.steps.transitDetails.transitLine.name,"
@@ -176,6 +202,7 @@ async def directions(origin: str, destination: str, mode: str = "walking", langu
     rt = routes[0]
     dur_s = int(str(rt.get("duration", "0s")).rstrip("s") or 0)
     dist_m = rt.get("distanceMeters")
+    polyline = _decode_polyline(rt.get("polyline", {}).get("encodedPolyline", ""))
     transit_lines: list[str] = []
     for leg in rt.get("legs", []):
         for step in leg.get("steps", []):
@@ -193,4 +220,5 @@ async def directions(origin: str, destination: str, mode: str = "walking", langu
         "mode": mode,
         "no_route": False,
         "transit_lines": transit_lines,
+        "polyline": polyline,
     }
