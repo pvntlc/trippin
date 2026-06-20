@@ -93,9 +93,24 @@ export function TransitModal({
                       </Text>
                       {isChosen && <Text style={styles.chosenBadge}>선택됨 ✓</Text>}
                     </View>
-                    {o.steps.map((s, j) => (
-                      <Text key={j} style={styles.step}>🚃 {s.line}  {s.from_time}→{s.to_time}</Text>
-                    ))}
+                    {o.steps.length === 0 ? (
+                      <Text style={styles.stepWalk}>🚶 도보 이동</Text>
+                    ) : (
+                      o.steps.map((s, j) =>
+                        s.mode === "walk" ? (
+                          <Text key={j} style={styles.stepWalk}>
+                            🚶 도보 {s.duration_text ?? ""}{s.to_name ? ` → ${s.to_name}` : ""}
+                          </Text>
+                        ) : (
+                          <View key={j} style={styles.stepRow}>
+                            <Text style={styles.step}>🚃 {s.line}</Text>
+                            <Text style={styles.stepSub}>
+                              {s.from_name ? `${s.from_name} ` : ""}{s.from_time} → {s.to_name ? `${s.to_name} ` : ""}{s.to_time}
+                            </Text>
+                          </View>
+                        )
+                      )
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -126,5 +141,8 @@ const styles = StyleSheet.create({
   optTime: { fontSize: 16, fontWeight: "800", color: Colors.accentDeep },
   optMeta: { fontSize: 13, color: Colors.textSub, fontWeight: "600" },
   chosenBadge: { fontSize: 12, color: Colors.white, backgroundColor: Colors.accent, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: "hidden", fontWeight: "700" },
-  step: { fontSize: 13, color: Colors.text, fontWeight: "600", marginTop: 2 },
+  stepRow: { marginTop: 4 },
+  step: { fontSize: 13, color: Colors.text, fontWeight: "700" },
+  stepSub: { fontSize: 12, color: Colors.textSub, marginTop: 1 },
+  stepWalk: { fontSize: 12.5, color: Colors.textMuted, fontWeight: "600", marginTop: 4 },
 });

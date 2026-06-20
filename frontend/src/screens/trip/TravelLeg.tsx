@@ -68,12 +68,22 @@ export function TravelLeg({
               <Text style={styles.text}>
                 {chosen.depart}→{chosen.arrive} · {chosen.duration_text}{chosen.fare_text ? ` · ${chosen.fare_text}` : ""}
               </Text>
-              <Text style={styles.lines}>{chosen.steps.map((s) => s.line).join(" → ")}</Text>
+              <Text style={styles.lines}>
+                {chosen.steps.length === 0
+                  ? "🚶 도보"
+                  : chosen.steps
+                      .map((s) => (s.mode === "walk" ? `🚶${s.duration_text ?? "도보"}` : `🚃${s.line.split(" (")[0]}`))
+                      .join(" → ")}
+              </Text>
             </>
           ) : (
             <Text style={styles.pick}>🚇 대중교통 시간 선택하기 →</Text>
           )}
-          {!from.planned_time && <Text style={styles.warn}>⚠️ 출발 장소 계획 시간 미설정 (현재 시각 기준)</Text>}
+          {!from.planned_time && (
+            <View style={styles.warnBadge}>
+              <Text style={styles.warnBadgeText}>⚠️ 계획 시간 미설정 · 현재 시각 기준</Text>
+            </View>
+          )}
         </TouchableOpacity>
       ) : (
         <View style={{ flex: 1 }}>
@@ -94,5 +104,6 @@ const styles = StyleSheet.create({
   text: { fontSize: 12, color: Colors.textSub, fontWeight: "500" },
   lines: { fontSize: 12, color: Colors.accentDeep, fontWeight: "600", marginTop: 1 },
   pick: { fontSize: 12, color: Colors.accentDeep, fontWeight: "700" },
-  warn: { fontSize: 11, color: Colors.warn, fontWeight: "600", marginTop: 1 },
+  warnBadge: { alignSelf: "flex-start", backgroundColor: Colors.warnBg, borderColor: Colors.warn, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3 },
+  warnBadgeText: { fontSize: 11, color: Colors.warn, fontWeight: "700" },
 });
