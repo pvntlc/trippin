@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { placeApi, type Place } from "../../services/api";
 import { Colors } from "../../constants/colors";
+import { TimePicker } from "../../components/TimePicker";
 
 const CATEGORIES = ["관광", "식비", "카페", "숙박", "쇼핑", "기타"];
 
@@ -70,13 +71,7 @@ export function PlaceEditModal({
 
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.label}>시간</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="예: 09:30"
-              value={time}
-              onChangeText={setTime}
-              placeholderTextColor={Colors.textMuted}
-            />
+            <TimePicker value={time} onChange={setTime} />
 
             <Text style={styles.label}>분류</Text>
             <View style={styles.chips}>
