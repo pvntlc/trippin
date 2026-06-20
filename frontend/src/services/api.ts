@@ -188,9 +188,9 @@ export type DirectionsResult = {
   distance_text?: string | null;
   duration_s?: number | null;
   duration_text?: string | null;
-  summary?: string;
   mode?: string;
   no_route?: boolean;
+  transit_lines?: string[];
 };
 
 export const mapsApi = {

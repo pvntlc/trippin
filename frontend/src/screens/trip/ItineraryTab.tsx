@@ -6,7 +6,7 @@ import { placeApi, type Place, type Trip } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
-import { TravelLeg } from "./TravelLeg";
+import { TravelLeg, type LegMode } from "./TravelLeg";
 
 // 두 좌표 직선거리(km) — 코스 정렬용
 function haversine(a: Place, b: Place): number {
@@ -60,14 +60,13 @@ function sortByTime(arr: Place[]): Place[] {
 }
 
 type Section = { title: string; date: string; dayIndex: number | null; data: Place[] };
-type Mode = "walking" | "driving";
 
 export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }) {
   const tripId = trip.id;
   const [showSearch, setShowSearch] = useState(false);
   const [searchDay, setSearchDay] = useState<number | null | undefined>(undefined);
   const [editing, setEditing] = useState<Place | null>(null);
-  const [mode, setMode] = useState<Mode>("walking");
+  const [legModes, setLegModes] = useState<Record<string, LegMode>>({});
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 
   const qc = useQueryClient();
@@ -119,18 +118,6 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, paddingBottom: 90 }}
         stickySectionHeadersEnabled={false}
-        ListHeaderComponent={
-          <View style={styles.modeRow}>
-            <Text style={styles.modeLabel}>이동수단</Text>
-            {(["walking", "driving"] as Mode[]).map((m) => (
-              <TouchableOpacity key={m} style={[styles.modeChip, mode === m && styles.modeChipOn]} onPress={() => setMode(m)}>
-                <Text style={[styles.modeChipText, mode === m && styles.modeChipTextOn]}>
-                  {m === "walking" ? "🚶 도보" : "🚗 자동차"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        }
         renderSectionHeader={({ section }) => {
           const coordCount = section.data.filter((p) => p.lat != null && p.lng != null).length;
           return (
@@ -156,7 +143,18 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
         }
         renderItem={({ item, index, section }) => (
           <>
-            {index > 0 && <TravelLeg from={section.data[index - 1]} to={item} mode={mode} />}
+            {index > 0 && (() => {
+              const prev = section.data[index - 1];
+              const key = `${prev.id}-${item.id}`;
+              return (
+                <TravelLeg
+                  from={prev}
+                  to={item}
+                  mode={legModes[key] ?? "walking"}
+                  onMode={(m) => setLegModes((s) => ({ ...s, [key]: m }))}
+                />
+              );
+            })()}
             <TouchableOpacity
               style={styles.placeCard}
               onPress={() => canEdit && setEditing(item)}
