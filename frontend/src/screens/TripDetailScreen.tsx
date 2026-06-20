@@ -3,9 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal } fr
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import { tripApi } from "../services/api";
+import { tripApi, type TransitOption } from "../services/api";
 import { Colors } from "../constants/colors";
 import { ItineraryTab } from "./trip/ItineraryTab";
+import type { LegMode } from "./trip/TravelLeg";
 import { MapTab } from "./trip/MapTab";
 import { BudgetTab } from "./trip/BudgetTab";
 import { ChecklistTab } from "./trip/ChecklistTab";
@@ -27,6 +28,9 @@ export function TripDetailScreen({ route, navigation }: Props) {
   const { tripId } = route.params;
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabKey>("itinerary");
+  // 구간별 이동수단/선택 대중교통 — 일정 탭에서 고르고 지도 탭에서 경로로 그림
+  const [legModes, setLegModes] = useState<Record<string, LegMode>>({});
+  const [transitChoices, setTransitChoices] = useState<Record<string, TransitOption>>({});
   const [showMembers, setShowMembers] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -74,8 +78,17 @@ export function TripDetailScreen({ route, navigation }: Props) {
       </View>
 
       <View style={{ flex: 1 }}>
-        {tab === "itinerary" && <ItineraryTab trip={trip} canEdit={canEdit} />}
-        {tab === "map" && <MapTab tripId={tripId} />}
+        {tab === "itinerary" && (
+          <ItineraryTab
+            trip={trip}
+            canEdit={canEdit}
+            legModes={legModes}
+            setLegModes={setLegModes}
+            transitChoices={transitChoices}
+            setTransitChoices={setTransitChoices}
+          />
+        )}
+        {tab === "map" && <MapTab tripId={tripId} legModes={legModes} transitChoices={transitChoices} />}
         {tab === "budget" && <BudgetTab tripId={tripId} canEdit={canEdit} currency={trip.currency} />}
         {tab === "checklist" && <ChecklistTab tripId={tripId} canEdit={canEdit} />}
       </View>

@@ -162,11 +162,21 @@ def _fare(move: dict):
     return rf.get("lowest_total_ic") or rf.get("lowest_total_ticket")
 
 
+def _coord(pt: dict):
+    c = pt.get("coord") or {}
+    lat, lon = c.get("lat"), c.get("lon")
+    if lat is None or lon is None:
+        return None
+    return [lat, lon]
+
+
 def _parse_item(it: dict) -> dict:
     mv = it.get("summary", {}).get("move", {})
     minutes = mv.get("time")
     fare = _fare(mv)
     sections = it.get("sections", [])
+    # 경로 지오메트리: NAVITIME은 노선 shape를 안 줘서 지점(역) 좌표를 순서대로 이음
+    shape = [c for c in (_coord(s) for s in sections if s.get("type") == "point") if c]
     steps = []
     # 실제 이동은 '도보 → 전철 → 도보' 처럼 구성됨. 도보 구간도 모두 포함한다.
     # 역/지점 이름은 인접한 point 섹션에서 가져옴.
@@ -197,6 +207,7 @@ def _parse_item(it: dict) -> dict:
         "depart": depart,
         "arrive": arrive,
         "steps": steps,
+        "shape": shape,
     }
 
 
@@ -233,4 +244,5 @@ async def transit_route(origin: str, destination: str, depart: str | None = None
         "no_route": best["duration_text"] is None,
         "transit_lines": [s["line"] for s in best["steps"] if s["mode"] == "transit"],
         "options": options,
+        "polyline": best.get("shape", []),
     }
