@@ -3,11 +3,28 @@
 RapidAPI 'NAVITIME Route (totalnavi)' 의 /route_transit 사용.
 여러 경로 옵션 + 각 구간 출발/도착 시각 + 한글 노선명(매핑) 제공.
 """
+import calendar
 import time
 
 import httpx
 
 from app.core.config import settings
+
+
+def _start_time(depart: str | None) -> str:
+    """depart='HH:MM' → 오늘(JST) 그 시각 ISO. 과거면 +1일. 없으면 지금+2분."""
+    now = time.time() + 9 * 3600  # JST 기준 epoch
+    if depart and ":" in depart:
+        try:
+            hh, mm = depart.split(":")[:2]
+            lt = time.gmtime(now)
+            target = calendar.timegm((lt.tm_year, lt.tm_mon, lt.tm_mday, int(hh), int(mm), 0, 0, 0, 0))
+            if target < now:
+                target += 86400
+            return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(target))
+        except Exception:
+            pass
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now + 120))
 
 _HOST = "navitime-route-totalnavi.p.rapidapi.com"
 _URL = f"https://{_HOST}/route_transit"
@@ -86,19 +103,20 @@ def _parse_item(it: dict) -> dict:
         "duration_text": f"{minutes}분" if minutes else None,
         "fare_text": f"{int(fare):,}엔" if fare else None,
         "transfers": mv.get("transit_count", 0),
+        "depart": steps[0]["from_time"] if steps else _hhmm(mv.get("from_time", "")),
+        "arrive": steps[-1]["to_time"] if steps else _hhmm(mv.get("to_time", "")),
         "steps": steps,
     }
 
 
-async def transit_route(origin: str, destination: str) -> dict | None:
-    """일본 대중교통 — 여러 경로 옵션. 키 없거나 실패 시 None(구글 폴백)."""
+async def transit_route(origin: str, destination: str, depart: str | None = None) -> dict | None:
+    """일본 대중교통 — depart='HH:MM' 기준 이후 출발편 여러 개. 키 없거나 실패 시 None."""
     key = settings.navitime_api_key
     if not key:
         return None
-    start_time = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() + 9 * 3600 + 120))
     params = {
-        "start": origin, "goal": destination, "start_time": start_time,
-        "datum": "wgs84", "coord_unit": "degree", "term": "1440", "limit": "3",
+        "start": origin, "goal": destination, "start_time": _start_time(depart),
+        "datum": "wgs84", "coord_unit": "degree", "term": "1440", "limit": "5",
     }
     headers = {"X-RapidAPI-Key": key, "X-RapidAPI-Host": _HOST}
     try:

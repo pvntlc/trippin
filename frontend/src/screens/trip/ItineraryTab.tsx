@@ -2,11 +2,12 @@ import React, { useMemo, useState } from "react";
 import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { placeApi, type Place, type Trip } from "../../services/api";
+import { placeApi, type Place, type Trip, type TransitOption } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
 import { TravelLeg, type LegMode } from "./TravelLeg";
+import { TransitModal } from "./TransitModal";
 
 // 두 좌표 직선거리(km) — 코스 정렬용
 function haversine(a: Place, b: Place): number {
@@ -67,6 +68,8 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
   const [searchDay, setSearchDay] = useState<number | null | undefined>(undefined);
   const [editing, setEditing] = useState<Place | null>(null);
   const [legModes, setLegModes] = useState<Record<string, LegMode>>({});
+  const [transitChoices, setTransitChoices] = useState<Record<string, TransitOption>>({});
+  const [transitModal, setTransitModal] = useState<{ from: Place; to: Place; key: string } | null>(null);
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 
   const qc = useQueryClient();
@@ -152,6 +155,8 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
                   to={item}
                   mode={legModes[key] ?? "walking"}
                   onMode={(m) => setLegModes((s) => ({ ...s, [key]: m }))}
+                  chosen={transitChoices[key] ?? null}
+                  onOpenTransit={() => setTransitModal({ from: prev, to: item, key })}
                 />
               );
             })()}
@@ -190,6 +195,18 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
         onClose={() => setShowSearch(false)}
       />
       <PlaceEditModal tripId={tripId} place={editing} dayCount={dayCount} onClose={() => setEditing(null)} />
+
+      <TransitModal
+        from={transitModal?.from ?? null}
+        to={transitModal?.to ?? null}
+        visible={transitModal != null}
+        chosen={transitModal ? transitChoices[transitModal.key] ?? null : null}
+        onSelect={(o) => {
+          if (transitModal) setTransitChoices((s) => ({ ...s, [transitModal.key]: o }));
+          setTransitModal(null);
+        }}
+        onClose={() => setTransitModal(null)}
+      />
     </View>
   );
 }

@@ -111,12 +111,13 @@ async def place_summary(
 
 @router.get("/directions")
 async def route(
-    origin: str = Query(description="'lat,lng' 또는 'place_id:xxx'"),
-    destination: str = Query(description="'lat,lng' 또는 'place_id:xxx'"),
+    origin: str = Query(description="'lat,lng'"),
+    destination: str = Query(description="'lat,lng'"),
     mode: str = Query("transit", pattern="^(driving|walking|bicycling|transit)$"),
+    depart: str | None = Query(None, description="출발 시각 'HH:MM' (대중교통 시간대 기준)"),
     _: User = Depends(get_current_user),
 ):
     try:
-        return await gmaps.directions(origin, destination, mode)
+        return await gmaps.directions(origin, destination, mode, depart=depart)
     except gmaps.GoogleMapsError as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
