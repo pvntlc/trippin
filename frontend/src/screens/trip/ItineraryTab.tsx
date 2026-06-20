@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { placeApi, type Place, type Trip } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
+import { PlaceEditModal } from "./PlaceEditModal";
 
 function daysBetween(start: string, end: string): number {
   const s = new Date(start).getTime();
@@ -16,6 +17,7 @@ function daysBetween(start: string, end: string): number {
 export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }) {
   const tripId = trip.id;
   const [showSearch, setShowSearch] = useState(false);
+  const [editing, setEditing] = useState<Place | null>(null);
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 
   const { data: places, isLoading } = useQuery({
@@ -55,14 +57,20 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
           section.data.length === 0 ? <Text style={styles.emptyDay}>일정 없음 — 장소를 추가해 보세요</Text> : null
         }
         renderItem={({ item }) => (
-          <View style={styles.placeCard}>
+          <TouchableOpacity
+            style={styles.placeCard}
+            onPress={() => canEdit && setEditing(item)}
+            disabled={!canEdit}
+            activeOpacity={canEdit ? 0.6 : 1}
+          >
             {!!item.planned_time && <Text style={styles.time}>{item.planned_time}</Text>}
             <View style={{ flex: 1 }}>
               <Text style={styles.placeName}>{item.name}</Text>
               {!!item.address && <Text style={styles.placeAddr}>{item.address}</Text>}
+              {!!item.note && <Text style={styles.placeNote}>📝 {item.note}</Text>}
             </View>
             {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
-          </View>
+          </TouchableOpacity>
         )}
       />
 
@@ -73,6 +81,7 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
       )}
 
       <PlaceSearchModal tripId={tripId} dayCount={dayCount} visible={showSearch} onClose={() => setShowSearch(false)} />
+      <PlaceEditModal tripId={tripId} place={editing} dayCount={dayCount} onClose={() => setEditing(null)} />
     </View>
   );
 }
@@ -86,6 +95,7 @@ const styles = StyleSheet.create({
   time: { fontSize: 13, fontWeight: "700", color: Colors.accent, width: 44 },
   placeName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   placeAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  placeNote: { fontSize: 12, color: Colors.textSub, marginTop: 4 },
   tag: { fontSize: 11, color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
   fab: { position: "absolute", left: 16, right: 16, bottom: 20, backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 15, alignItems: "center", elevation: 4 },
   fabText: { color: Colors.white, fontSize: 16, fontWeight: "700" },
