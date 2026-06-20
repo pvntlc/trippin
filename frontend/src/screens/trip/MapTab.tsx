@@ -4,7 +4,7 @@ import { useQuery, useQueries } from "@tanstack/react-query";
 
 import { placeApi, mapsApi, type Place, type TransitOption, type LatLngTuple } from "../../services/api";
 import { PlacesMap } from "../../components/PlacesMap";
-import { type MapPlace, type MapRoute, dayColor } from "../../components/mapTypes";
+import { type MapPlace, type MapRoute, type MapStation, dayColor } from "../../components/mapTypes";
 import { type LegMode } from "./TravelLeg";
 import { Colors } from "../../constants/colors";
 
@@ -95,6 +95,24 @@ export function MapTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legs, legModes, transitChoices, geomSig]);
 
+  // 대중교통 구간의 타고/내리는 역 마커
+  const stations: MapStation[] = useMemo(() => {
+    const out: MapStation[] = [];
+    const seen = new Set<string>();
+    legs.forEach((leg, i) => {
+      if ((legModes[leg.key] ?? "walking") !== "transit") return;
+      const list = transitChoices[leg.key]?.stations ?? queries[i]?.data?.stations ?? [];
+      list.forEach((s) => {
+        const k = `${s.name}@${s.lat.toFixed(4)},${s.lng.toFixed(4)}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        out.push({ key: k, name: s.name, lat: s.lat, lng: s.lng, board: s.board });
+      });
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legs, legModes, transitChoices, geomSig]);
+
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
   }
@@ -109,9 +127,11 @@ export function MapTab({
 
   return (
     <View style={styles.container}>
-      <PlacesMap places={mapPlaces} routes={routes} />
+      <PlacesMap places={mapPlaces} routes={routes} stations={stations} />
       <View style={styles.badge}>
-        <Text style={styles.badgeText}>📍 {mapPlaces.length}곳{routes.length ? ` · ${routes.length}구간 경로` : ""}</Text>
+        <Text style={styles.badgeText}>
+          📍 {mapPlaces.length}곳{routes.length ? ` · ${routes.length}구간 경로` : ""}{stations.length ? ` · 🚉 ${stations.length}역` : ""}
+        </Text>
       </View>
     </View>
   );

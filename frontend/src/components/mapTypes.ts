@@ -12,6 +12,9 @@ export type LatLng = { lat: number; lng: number };
 // Day 별 경로(장소를 일정 순서대로 이은 선)
 export type MapRoute = { key: string; color: string; coords: LatLng[] };
 
+// 대중교통 경로에서 타고/내리는 역
+export type MapStation = { key: string; name: string; lat: number; lng: number; board: boolean };
+
 const DAY_COLORS = ["#0ea5e9", "#f97316", "#16a34a", "#a855f7", "#ec4899", "#eab308", "#14b8a6", "#ef4444"];
 export function dayColor(day: number | null): string {
   if (day === null) return "#94a3b8";
