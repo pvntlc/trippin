@@ -82,9 +82,9 @@ async def place_details(place_id: str, language: str = "ko") -> dict:
 
 
 async def place_reviews(place_id: str, language: str = "ko") -> dict:
-    """평점·리뷰수·리뷰 텍스트 목록 조회 (요약용)."""
+    """평점·리뷰수·리뷰 텍스트 + 사진(여러 장) 조회 (상세/요약용)."""
     key = _require_key()
-    fields = "name,rating,user_ratings_total,reviews,types"
+    fields = "name,rating,user_ratings_total,reviews,types,photos"
     params = {"place_id": place_id, "fields": fields, "language": language, "key": key}
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         resp = await client.get(_PLACE_DETAILS, params=params)
@@ -93,12 +93,14 @@ async def place_reviews(place_id: str, language: str = "ko") -> dict:
         raise GoogleMapsError(f"Place 상세 실패: {data.get('status')}")
     r = data.get("result", {})
     reviews = [rv.get("text", "") for rv in r.get("reviews", []) if rv.get("text")]
+    photo_refs = [p.get("photo_reference") for p in r.get("photos", []) if p.get("photo_reference")][:8]
     return {
         "name": r.get("name", ""),
         "rating": r.get("rating"),
         "user_ratings_total": r.get("user_ratings_total", 0),
         "reviews": reviews,
         "types": r.get("types", []),
+        "photo_refs": photo_refs,
     }
 
 

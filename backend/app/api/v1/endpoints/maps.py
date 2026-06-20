@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -55,11 +56,16 @@ async def place_summary(
         if updated.tzinfo is None:  # SQLite 는 naive 로 돌아올 수 있음
             updated = updated.replace(tzinfo=timezone.utc)
         if now - updated < _CACHE_TTL:
+            try:
+                photos = json.loads(cached.photo_refs) if cached.photo_refs else []
+            except Exception:
+                photos = []
             return {
                 "rating": cached.rating,
                 "user_ratings_total": cached.user_ratings_total,
                 "review_summary": cached.review_summary,
                 "review_count_used": cached.review_count_used,
+                "photos": photos,
                 "cached": True,
             }
 
@@ -69,6 +75,8 @@ async def place_summary(
     except gmaps.GoogleMapsError as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
     summary = await summarize_reviews(info["name"], info["reviews"])
+    photos = info["photo_refs"]
+    photos_json = json.dumps(photos)
 
     # Anthropic 키가 있을 때만 캐시에 기록 (키 미설정으로 빈 요약이 굳지 않게)
     if settings.app_anthropic_api_key:
@@ -77,6 +85,7 @@ async def place_summary(
             cached.user_ratings_total = info["user_ratings_total"]
             cached.review_summary = summary
             cached.review_count_used = len(info["reviews"])
+            cached.photo_refs = photos_json
             cached.updated_at = now
         else:
             db.add(PlaceReviewCache(
@@ -85,6 +94,7 @@ async def place_summary(
                 user_ratings_total=info["user_ratings_total"],
                 review_summary=summary,
                 review_count_used=len(info["reviews"]),
+                photo_refs=photos_json,
                 updated_at=now,
             ))
         await db.commit()
@@ -94,6 +104,7 @@ async def place_summary(
         "user_ratings_total": info["user_ratings_total"],
         "review_summary": summary,
         "review_count_used": len(info["reviews"]),
+        "photos": photos,
         "cached": False,
     }
 
