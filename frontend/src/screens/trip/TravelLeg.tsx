@@ -49,6 +49,8 @@ export function TravelLeg({
     lines = parts.join(" · ");
   }
 
+  const options = mode === "transit" && !data?.no_route ? data?.options ?? [] : [];
+
   return (
     <View style={styles.row}>
       <View style={styles.line} />
@@ -60,8 +62,24 @@ export function TravelLeg({
         ))}
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.text}>{label}</Text>
-        {!!lines && <Text style={styles.lines}>{lines}</Text>}
+        {options.length > 0 ? (
+          options.map((o, i) => (
+            <View key={i} style={i === 0 ? styles.optBest : styles.opt}>
+              <Text style={styles.optHead}>
+                {i === 0 ? "🚇 " : "• "}{o.duration_text}{o.fare_text ? ` · ${o.fare_text}` : ""}
+                {o.transfers > 0 ? ` · 환승 ${o.transfers}회` : ""}
+              </Text>
+              {o.steps.map((s, j) => (
+                <Text key={j} style={styles.step}>{s.line}  {s.from_time}→{s.to_time}</Text>
+              ))}
+            </View>
+          ))
+        ) : (
+          <>
+            <Text style={styles.text}>{label}</Text>
+            {!!lines && <Text style={styles.lines}>{lines}</Text>}
+          </>
+        )}
       </View>
     </View>
   );
@@ -76,4 +94,9 @@ const styles = StyleSheet.create({
   chipIcon: { fontSize: 13 },
   text: { fontSize: 12, color: Colors.textSub, fontWeight: "500" },
   lines: { fontSize: 12, color: Colors.accentDeep, fontWeight: "600", marginTop: 1 },
+  optBest: { marginBottom: 4 },
+  opt: { marginBottom: 4, opacity: 0.75 },
+  optHead: { fontSize: 12, color: Colors.text, fontWeight: "700" },
+  step: { fontSize: 12, color: Colors.accentDeep, fontWeight: "600", marginTop: 1, paddingLeft: 14 },
 });
+
