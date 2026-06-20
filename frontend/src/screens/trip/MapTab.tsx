@@ -2,10 +2,20 @@ import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
-import { placeApi } from "../../services/api";
+import { placeApi, type Place } from "../../services/api";
 import { PlacesMap } from "../../components/PlacesMap";
-import { type MapPlace } from "../../components/mapTypes";
+import { type MapPlace, type MapRoute, dayColor } from "../../components/mapTypes";
 import { Colors } from "../../constants/colors";
+
+// 일정 탭과 동일하게 시간순 정렬 (시간 있는 것 먼저, 없으면 순서대로)
+function sortByTime(arr: Place[]): Place[] {
+  return [...arr].sort((a, b) => {
+    if (a.planned_time && b.planned_time) return a.planned_time.localeCompare(b.planned_time);
+    if (a.planned_time) return -1;
+    if (b.planned_time) return 1;
+    return a.order_index - b.order_index;
+  });
+}
 
 export function MapTab({ tripId }: { tripId: number }) {
   const { data: places, isLoading } = useQuery({
@@ -21,6 +31,24 @@ export function MapTab({ tripId }: { tripId: number }) {
     [places]
   );
 
+  // Day 별 경로: 좌표가 있는 장소를 시간순으로 이어 선으로 표시 (가고 싶은 곳 제외)
+  const routes: MapRoute[] = useMemo(() => {
+    const byDay: Record<string, Place[]> = {};
+    (places ?? [])
+      .filter((p) => p.lat != null && p.lng != null && p.day_index !== null)
+      .forEach((p) => {
+        const k = String(p.day_index);
+        (byDay[k] ??= []).push(p);
+      });
+    return Object.entries(byDay)
+      .map(([k, arr]) => ({
+        key: k,
+        color: dayColor(Number(k)),
+        coords: sortByTime(arr).map((p) => ({ lat: p.lat as number, lng: p.lng as number })),
+      }))
+      .filter((r) => r.coords.length >= 2);
+  }, [places]);
+
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
   }
@@ -35,9 +63,9 @@ export function MapTab({ tripId }: { tripId: number }) {
 
   return (
     <View style={styles.container}>
-      <PlacesMap places={mapPlaces} />
+      <PlacesMap places={mapPlaces} routes={routes} />
       <View style={styles.badge}>
-        <Text style={styles.badgeText}>📍 {mapPlaces.length}곳</Text>
+        <Text style={styles.badgeText}>📍 {mapPlaces.length}곳{routes.length ? ` · ${routes.length}일 경로` : ""}</Text>
       </View>
     </View>
   );

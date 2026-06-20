@@ -7,6 +7,17 @@ export type MapPlace = {
   day_index: number | null;
 };
 
+export type LatLng = { lat: number; lng: number };
+
+// Day 별 경로(장소를 일정 순서대로 이은 선)
+export type MapRoute = { key: string; color: string; coords: LatLng[] };
+
+const DAY_COLORS = ["#0ea5e9", "#f97316", "#16a34a", "#a855f7", "#ec4899", "#eab308", "#14b8a6", "#ef4444"];
+export function dayColor(day: number | null): string {
+  if (day === null) return "#94a3b8";
+  return DAY_COLORS[day % DAY_COLORS.length];
+}
+
 // 장소가 없을 때 기본 중심 (도쿄)
 export const DEFAULT_CENTER = { lat: 35.6762, lng: 139.6503 };
 
