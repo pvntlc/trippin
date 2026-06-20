@@ -13,6 +13,8 @@ export const Colors = {
 
   border: "#e2e8f0",
   danger: "#dc2626",
+  warn: "#d97706",
+  warnBg: "#fffbeb",
   success: "#16a34a",
   white: "#ffffff",
 } as const;
