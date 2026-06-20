@@ -167,7 +167,16 @@ export const memberApi = {
 };
 
 // ── Maps (백엔드 프록시) ───────────────────────────────
+export type PlaceSummary = {
+  rating: number | null;
+  user_ratings_total: number;
+  review_summary: string;
+  review_count_used: number;
+};
+
 export const mapsApi = {
   search: (q: string) =>
     request<{ results: PlaceSearchResult[] }>(`/maps/search?q=${encodeURIComponent(q)}`),
+  placeSummary: (placeId: string) =>
+    request<PlaceSummary>(`/maps/place/${encodeURIComponent(placeId)}/summary`),
 };

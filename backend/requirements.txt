@@ -19,3 +19,6 @@ python-multipart==0.0.20
 
 # --- HTTP client (Google Maps API 프록시) ---
 httpx==0.28.1
+
+# --- LLM (리뷰 요약) ---
+anthropic==0.40.0

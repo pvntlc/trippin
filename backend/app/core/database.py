@@ -18,6 +18,6 @@ async def get_db():
 
 async def init_db():
     # 모델 모듈을 import 해야 Base.metadata 에 테이블이 등록됨
-    from app.models import user, trip  # noqa: F401
+    from app.models import user, trip, place_cache  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
