@@ -6,6 +6,7 @@ import { placeApi, type Place, type Trip } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
+import { TravelLeg } from "./TravelLeg";
 
 function daysBetween(start: string, end: string): number {
   const s = new Date(start).getTime();
@@ -32,10 +33,15 @@ function sortByTime(arr: Place[]): Place[] {
   });
 }
 
+type Section = { title: string; date: string; dayIndex: number | null; data: Place[] };
+type Mode = "walking" | "driving";
+
 export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }) {
   const tripId = trip.id;
   const [showSearch, setShowSearch] = useState(false);
+  const [searchDay, setSearchDay] = useState<number | null | undefined>(undefined);
   const [editing, setEditing] = useState<Place | null>(null);
+  const [mode, setMode] = useState<Mode>("walking");
   const dayCount = daysBetween(trip.start_date, trip.end_date);
 
   const { data: places, isLoading } = useQuery({
@@ -43,25 +49,25 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
     queryFn: () => placeApi.list(tripId),
   });
 
-  const sections = useMemo(() => {
+  const sections = useMemo<Section[]>(() => {
     const byDay: Record<string, Place[]> = {};
     (places ?? []).forEach((p) => {
       const key = p.day_index === null ? "wishlist" : String(p.day_index);
       (byDay[key] ??= []).push(p);
     });
-    const result: { title: string; date: string; data: Place[] }[] = Array.from(
-      { length: dayCount },
-      (_, i) => ({
-        title: `Day ${i + 1}`,
-        date: dayDateLabel(trip.start_date, i),
-        data: sortByTime(byDay[String(i)] ?? []),
-      })
-    );
+    const result: Section[] = Array.from({ length: dayCount }, (_, i) => ({
+      title: `Day ${i + 1}`,
+      date: dayDateLabel(trip.start_date, i),
+      dayIndex: i,
+      data: sortByTime(byDay[String(i)] ?? []),
+    }));
     if (byDay["wishlist"]?.length) {
-      result.push({ title: "📌 가고 싶은 곳", date: "", data: byDay["wishlist"] });
+      result.push({ title: "📌 가고 싶은 곳", date: "", dayIndex: null, data: byDay["wishlist"] });
     }
     return result;
   }, [trip, places, dayCount]);
+
+  const openSearch = (day: number | null | undefined) => { setSearchDay(day); setShowSearch(true); };
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
@@ -74,42 +80,70 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, paddingBottom: 90 }}
         stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          <View style={styles.modeRow}>
+            <Text style={styles.modeLabel}>이동수단</Text>
+            {(["walking", "driving"] as Mode[]).map((m) => (
+              <TouchableOpacity key={m} style={[styles.modeChip, mode === m && styles.modeChipOn]} onPress={() => setMode(m)}>
+                <Text style={[styles.modeChipText, mode === m && styles.modeChipTextOn]}>
+                  {m === "walking" ? "🚶 도보" : "🚗 자동차"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        }
         renderSectionHeader={({ section }) => (
           <View style={styles.dayHeaderRow}>
             <Text style={styles.dayHeader}>{section.title}</Text>
             {!!section.date && <Text style={styles.dayDate}>{section.date}</Text>}
+            <View style={{ flex: 1 }} />
+            {canEdit && (
+              <TouchableOpacity style={styles.addDayBtn} onPress={() => openSearch(section.dayIndex)}>
+                <Text style={styles.addDayText}>＋ 추가</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         renderSectionFooter={({ section }) =>
-          section.data.length === 0 ? <Text style={styles.emptyDay}>일정 없음 — 장소를 추가해 보세요</Text> : null
+          section.data.length === 0 ? <Text style={styles.emptyDay}>일정 없음 — ＋ 추가로 장소를 넣어보세요</Text> : null
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.placeCard}
-            onPress={() => canEdit && setEditing(item)}
-            disabled={!canEdit}
-            activeOpacity={canEdit ? 0.6 : 1}
-          >
-            <Text style={[styles.time, !item.planned_time && styles.timeNone]}>
-              {item.planned_time || "미정"}
-            </Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.placeName}>{item.name}</Text>
-              {!!item.address && <Text style={styles.placeAddr}>{item.address}</Text>}
-              {!!item.note && <Text style={styles.placeNote}>📝 {item.note}</Text>}
-            </View>
-            {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
-          </TouchableOpacity>
+        renderItem={({ item, index, section }) => (
+          <>
+            {index > 0 && <TravelLeg from={section.data[index - 1]} to={item} mode={mode} />}
+            <TouchableOpacity
+              style={styles.placeCard}
+              onPress={() => canEdit && setEditing(item)}
+              disabled={!canEdit}
+              activeOpacity={canEdit ? 0.6 : 1}
+            >
+              <Text style={[styles.time, !item.planned_time && styles.timeNone]}>
+                {item.planned_time || "미정"}
+              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.placeName}>{item.name}</Text>
+                {!!item.address && <Text style={styles.placeAddr}>{item.address}</Text>}
+                {!!item.note && <Text style={styles.placeNote}>📝 {item.note}</Text>}
+              </View>
+              {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
+            </TouchableOpacity>
+          </>
         )}
       />
 
       {canEdit && (
-        <TouchableOpacity style={styles.fab} onPress={() => setShowSearch(true)}>
+        <TouchableOpacity style={styles.fab} onPress={() => openSearch(undefined)}>
           <Text style={styles.fabText}>🔍 장소 검색·추가</Text>
         </TouchableOpacity>
       )}
 
-      <PlaceSearchModal tripId={tripId} destination={trip.destination} dayCount={dayCount} visible={showSearch} onClose={() => setShowSearch(false)} />
+      <PlaceSearchModal
+        tripId={tripId}
+        destination={trip.destination}
+        dayCount={dayCount}
+        defaultDay={searchDay}
+        visible={showSearch}
+        onClose={() => setShowSearch(false)}
+      />
       <PlaceEditModal tripId={tripId} place={editing} dayCount={dayCount} onClose={() => setEditing(null)} />
     </View>
   );
@@ -118,9 +152,17 @@ export function ItineraryTab({ trip, canEdit }: { trip: Trip; canEdit: boolean }
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  dayHeaderRow: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 16, marginBottom: 8 },
+  modeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  modeLabel: { fontSize: 12, color: Colors.textMuted, marginRight: 2 },
+  modeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: Colors.bgCardAlt },
+  modeChipOn: { backgroundColor: Colors.accent },
+  modeChipText: { fontSize: 12, fontWeight: "600", color: Colors.textSub },
+  modeChipTextOn: { color: Colors.white },
+  dayHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, marginBottom: 8 },
   dayHeader: { fontSize: 16, fontWeight: "700", color: Colors.accentDeep },
   dayDate: { fontSize: 13, color: Colors.textSub, fontWeight: "500" },
+  addDayBtn: { backgroundColor: Colors.bgCardAlt, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  addDayText: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },
   emptyDay: { color: Colors.textMuted, fontSize: 13, paddingVertical: 8, paddingLeft: 4 },
   placeCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bgCard, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   time: { fontSize: 13, fontWeight: "700", color: Colors.accent, width: 44 },

@@ -183,9 +183,23 @@ export type PlaceSummary = {
   photos: string[];
 };
 
+export type DirectionsResult = {
+  distance_m?: number | null;
+  distance_text?: string | null;
+  duration_s?: number | null;
+  duration_text?: string | null;
+  summary?: string;
+  mode?: string;
+  no_route?: boolean;
+};
+
 export const mapsApi = {
   search: (q: string) =>
     request<{ results: PlaceSearchResult[] }>(`/maps/search?q=${encodeURIComponent(q)}`),
   placeSummary: (placeId: string) =>
     request<PlaceSummary>(`/maps/place/${encodeURIComponent(placeId)}/summary`),
+  directions: (origin: string, destination: string, mode: "walking" | "driving" | "transit") =>
+    request<DirectionsResult>(
+      `/maps/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}`
+    ),
 };

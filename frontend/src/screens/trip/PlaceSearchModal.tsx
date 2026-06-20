@@ -24,12 +24,14 @@ export function PlaceSearchModal({
   tripId,
   destination,
   dayCount,
+  defaultDay,
   visible,
   onClose,
 }: {
   tripId: number;
   destination: string;
   dayCount: number;
+  defaultDay?: number | null;  // 지정 시 그 날에 바로 추가 버튼 노출
   visible: boolean;
   onClose: () => void;
 }) {
@@ -128,7 +130,18 @@ export function PlaceSearchModal({
           )}
         </View>
 
-        <Text style={styles.dayPrompt}>어느 날 일정에 넣을까요?</Text>
+        {defaultDay !== undefined && (
+          <TouchableOpacity
+            style={styles.primaryDay}
+            onPress={() => addMut.mutate({ place: item, dayIndex: defaultDay, category })}
+            disabled={addMut.isPending}
+          >
+            <Text style={styles.primaryDayText}>
+              ＋ {defaultDay === null ? "가고 싶은 곳" : `Day ${defaultDay + 1}`}에 추가
+            </Text>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.dayPrompt}>{defaultDay !== undefined ? "또는 다른 날:" : "어느 날 일정에 넣을까요?"}</Text>
         <View style={styles.dayGrid}>
           {dayOptions.map((d) => (
             <TouchableOpacity
@@ -264,6 +277,8 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 12, fontWeight: "700", color: Colors.textSub, marginBottom: 6 },
   summaryText: { fontSize: 14, color: Colors.text, lineHeight: 21 },
   summaryLoading: { fontSize: 13, color: Colors.textMuted },
+  primaryDay: { backgroundColor: Colors.accentDeep, borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 14 },
+  primaryDayText: { color: Colors.white, fontWeight: "700", fontSize: 15 },
   dayPrompt: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 14, marginBottom: 8 },
   dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   dayBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
