@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Anthropic (리뷰 요약). ANTHROPIC_API_KEY 는 시스템 예약 가능 → APP_ 접두사 사용.
     app_anthropic_api_key: str = ""
 
+    # NAVITIME (일본 대중교통 경로, RapidAPI). 구글이 일본 transit 미지원이라 대체.
+    navitime_api_key: str = ""
+
     # CORS (콤마 구분 문자열)
     cors_origins: str = "*"
 
