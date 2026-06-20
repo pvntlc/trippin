@@ -27,7 +27,8 @@ echo "=== 3) systemd 서비스 등록 ==="
 sudo cp "$APP_DIR/deploy/trippin.service" /etc/systemd/system/trippin.service
 sudo systemctl daemon-reload
 sudo systemctl enable trippin
-sudo systemctl restart trippin
+# .env 가 아직 없으면 시작 실패가 정상 (첫 배포가 .env 를 만들고 시작시킴)
+sudo systemctl restart trippin || echo "(.env 없어 시작 보류 — 첫 배포 후 자동 시작됩니다)"
 
 echo "=== 4) 포트 8002 개방 (서버 방화벽 iptables) ==="
 # OCI Ubuntu 는 기본 iptables 로 외부 포트를 막아둠. 8002 인바운드 허용.
