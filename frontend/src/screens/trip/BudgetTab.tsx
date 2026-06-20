@@ -102,7 +102,7 @@ export function BudgetTab({ tripId, canEdit, currency }: { tripId: number; canEd
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>지출 추가</Text>
             <TextInput style={styles.input} placeholder="내용 (예: 호텔 2박)" value={title} onChangeText={setTitle} placeholderTextColor={Colors.textMuted} />
-            <TextInput style={styles.input} placeholder={`금액 (${currency})`} value={amount} onChangeText={setAmount} keyboardType="numeric" placeholderTextColor={Colors.textMuted} />
+            <TextInput style={styles.input} placeholder={`금액 (${currency})`} value={amount} onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ""))} keyboardType="numeric" inputMode="decimal" placeholderTextColor={Colors.textMuted} />
             <View style={styles.catPick}>
               {CATEGORIES.map((c) => (
                 <TouchableOpacity key={c} onPress={() => setCategory(c)} style={[styles.catOpt, category === c && styles.catOptOn]}>

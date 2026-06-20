@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal } from "react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { tripApi } from "../services/api";
@@ -23,18 +23,31 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-export function TripDetailScreen({ route }: Props) {
+export function TripDetailScreen({ route, navigation }: Props) {
   const { tripId } = route.params;
+  const qc = useQueryClient();
   const [tab, setTab] = useState<TabKey>("itinerary");
   const [showMembers, setShowMembers] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: trip, isLoading } = useQuery({ queryKey: ["trip", tripId], queryFn: () => tripApi.get(tripId) });
+
+  const deleteMut = useMutation({
+    mutationFn: () => tripApi.remove(tripId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["trips"] });
+      navigation.goBack();
+    },
+  });
 
   if (isLoading || !trip) {
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
   }
 
   const canEdit = trip.my_role === "owner" || trip.my_role === "editor";
+  const isOwner = trip.my_role === "owner";
+  const closeActions = () => { setShowActions(false); setConfirmDelete(false); };
 
   return (
     <View style={styles.container}>
@@ -45,6 +58,9 @@ export function TripDetailScreen({ route }: Props) {
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={() => setShowMembers(true)}>
           <Text style={styles.shareText}>👥 공유</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.moreBtn} onPress={() => setShowActions(true)}>
+          <Text style={styles.moreText}>⋯</Text>
         </TouchableOpacity>
       </View>
 
@@ -65,6 +81,30 @@ export function TripDetailScreen({ route }: Props) {
       </View>
 
       <MembersModal tripId={tripId} canEdit={canEdit} visible={showMembers} onClose={() => setShowMembers(false)} />
+
+      <Modal visible={showActions} transparent animationType="fade" onRequestClose={closeActions}>
+        <TouchableOpacity style={styles.actionsBg} activeOpacity={1} onPress={closeActions}>
+          <View style={styles.actionsSheet}>
+            <Text style={styles.actionsTitle}>{trip.title}</Text>
+            {isOwner ? (
+              <TouchableOpacity
+                style={[styles.deleteRow, confirmDelete && styles.deleteRowConfirm]}
+                onPress={() => (confirmDelete ? deleteMut.mutate() : setConfirmDelete(true))}
+                disabled={deleteMut.isPending}
+              >
+                <Text style={[styles.deleteRowText, confirmDelete && styles.deleteRowTextConfirm]}>
+                  {confirmDelete ? "한 번 더 누르면 여행이 삭제됩니다" : "🗑  여행 삭제"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.actionsNote}>여행 삭제는 소유자만 할 수 있어요.</Text>
+            )}
+            <TouchableOpacity style={styles.cancelRow} onPress={closeActions}>
+              <Text style={styles.cancelRowText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -77,6 +117,18 @@ const styles = StyleSheet.create({
   dates: { fontSize: 14, color: Colors.textSub, marginTop: 4 },
   shareBtn: { backgroundColor: Colors.bgCardAlt, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
   shareText: { fontSize: 14, fontWeight: "600", color: Colors.accentDeep },
+  moreBtn: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: Colors.bgCardAlt },
+  moreText: { fontSize: 18, fontWeight: "700", color: Colors.textSub, lineHeight: 20 },
+  actionsBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  actionsSheet: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28 },
+  actionsTitle: { fontSize: 16, fontWeight: "700", color: Colors.text, marginBottom: 14 },
+  deleteRow: { paddingVertical: 15, borderRadius: 12, alignItems: "center", backgroundColor: "#fef2f2" },
+  deleteRowConfirm: { backgroundColor: Colors.danger },
+  deleteRowText: { color: Colors.danger, fontSize: 15, fontWeight: "700" },
+  deleteRowTextConfirm: { color: Colors.white },
+  actionsNote: { color: Colors.textMuted, fontSize: 14, paddingVertical: 12, textAlign: "center" },
+  cancelRow: { paddingVertical: 14, alignItems: "center", marginTop: 6 },
+  cancelRowText: { color: Colors.textSub, fontSize: 15, fontWeight: "600" },
   tabBar: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.bgCard },
   tabItem: { flex: 1, alignItems: "center", paddingVertical: 13 },
   tabLabel: { fontSize: 15, color: Colors.textMuted, fontWeight: "600" },
