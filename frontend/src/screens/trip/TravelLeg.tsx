@@ -41,7 +41,13 @@ export function TravelLeg({
       ? "경로 정보 없음"
       : `${data.duration_text} · ${data.distance_text ?? ""}`;
   }
-  const lines = mode === "transit" && data?.transit_lines?.length ? data.transit_lines.join(" → ") : "";
+  let lines = "";
+  if (mode === "transit" && data && !data.no_route) {
+    const parts: string[] = [];
+    if (data.transit_lines?.length) parts.push(data.transit_lines.join(" → "));
+    if (data.fare_text) parts.push(data.fare_text);
+    lines = parts.join(" · ");
+  }
 
   return (
     <View style={styles.row}>

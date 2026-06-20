@@ -191,6 +191,7 @@ export type DirectionsResult = {
   mode?: string;
   no_route?: boolean;
   transit_lines?: string[];
+  fare_text?: string | null;
 };
 
 export const mapsApi = {

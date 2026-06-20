@@ -132,8 +132,17 @@ async def directions(origin: str, destination: str, mode: str = "walking", langu
     """두 지점('lat,lng') 간 경로/소요시간 — Routes API.
 
     mode: walking | driving | transit | bicycling
-    대중교통은 노선 정보(transit_lines)도 반환. 일본 등 일부 지역은 transit 미지원(no_route).
+    대중교통은 노선 정보(transit_lines)도 반환.
+    일본 대중교통은 구글 미지원 → NAVITIME 으로 처리(키 있을 때).
     """
+    # 일본 대중교통 → NAVITIME (구글은 일본 transit 미지원)
+    if mode == "transit":
+        from app.services import navitime
+        if navitime.in_japan(origin) and settings.navitime_api_key:
+            nav = await navitime.transit_route(origin, destination)
+            if nav is not None:
+                return nav
+
     key = _require_key()
     travel_mode = _MODE_MAP.get(mode, "WALK")
     body: dict = {
