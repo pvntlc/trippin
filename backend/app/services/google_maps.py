@@ -104,41 +104,84 @@ async def place_reviews(place_id: str, language: str = "ko") -> dict:
     }
 
 
-async def directions(origin: str, destination: str, mode: str = "transit", language: str = "ko") -> dict:
-    """두 지점 간 경로/소요시간. origin·destination 은 'lat,lng' 또는 place_id:xxx.
+_ROUTES_API = "https://routes.googleapis.com/directions/v2:computeRoutes"
+_MODE_MAP = {"walking": "WALK", "driving": "DRIVE", "transit": "TRANSIT", "bicycling": "BICYCLE"}
 
-    mode: driving | walking | bicycling | transit
+
+def _fmt_duration(sec: int | None) -> str | None:
+    if not sec:
+        return None
+    m = round(sec / 60)
+    if m < 60:
+        return f"{m}분"
+    return f"{m // 60}시간 {m % 60}분" if m % 60 else f"{m // 60}시간"
+
+
+def _fmt_distance(meters: int | None) -> str | None:
+    if meters is None:
+        return None
+    return f"{meters / 1000:.1f} km" if meters >= 1000 else f"{meters} m"
+
+
+def _parse_latlng(s: str) -> dict:
+    lat, lng = s.split(",")
+    return {"location": {"latLng": {"latitude": float(lat), "longitude": float(lng)}}}
+
+
+async def directions(origin: str, destination: str, mode: str = "walking", language: str = "ko") -> dict:
+    """두 지점('lat,lng') 간 경로/소요시간 — Routes API.
+
+    mode: walking | driving | transit | bicycling
+    대중교통은 노선 정보(transit_lines)도 반환. 일본 등 일부 지역은 transit 미지원(no_route).
     """
     key = _require_key()
-    params = {
-        "origin": origin,
-        "destination": destination,
-        "mode": mode,
-        "language": language,
-        "key": key,
+    travel_mode = _MODE_MAP.get(mode, "WALK")
+    body: dict = {
+        "origin": _parse_latlng(origin),
+        "destination": _parse_latlng(destination),
+        "travelMode": travel_mode,
+        "languageCode": language,
     }
-    # 대중교통은 departure_time 이 있어야 경로가 안정적으로 나온다 (없으면 ZERO_RESULTS 빈발)
-    if mode == "transit":
-        params["departure_time"] = int(time.time())
+    if travel_mode == "TRANSIT":
+        body["departureTime"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 120))
+
+    field_mask = (
+        "routes.duration,routes.distanceMeters,"
+        "routes.legs.steps.travelMode,"
+        "routes.legs.steps.transitDetails.transitLine.nameShort,"
+        "routes.legs.steps.transitDetails.transitLine.name,"
+        "routes.legs.steps.transitDetails.stopCount"
+    )
+    headers = {"Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": field_mask}
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.get(_DIRECTIONS, params=params)
+        resp = await client.post(_ROUTES_API, json=body, headers=headers)
     data = resp.json()
-    status = data.get("status")
-    # 경로 없음은 에러가 아니라 "경로 없음" 결과로 반환
-    if status == "ZERO_RESULTS":
-        return {"distance_m": None, "duration_s": None, "duration_text": None,
-                "distance_text": None, "summary": "", "mode": mode, "no_route": True}
-    if status != "OK":
-        raise GoogleMapsError(f"Directions 실패: {status} {data.get('error_message', '')}")
+    if resp.status_code != 200:
+        raise GoogleMapsError(f"Routes 실패: {data.get('error', {}).get('message', resp.status_code)}")
+
     routes = data.get("routes", [])
     if not routes:
-        return {"distance_m": None, "duration_s": None, "summary": "", "mode": mode, "no_route": True}
-    leg = routes[0]["legs"][0]
+        return {"duration_s": None, "distance_m": None, "duration_text": None,
+                "distance_text": None, "mode": mode, "no_route": True, "transit_lines": []}
+
+    rt = routes[0]
+    dur_s = int(str(rt.get("duration", "0s")).rstrip("s") or 0)
+    dist_m = rt.get("distanceMeters")
+    transit_lines: list[str] = []
+    for leg in rt.get("legs", []):
+        for step in leg.get("steps", []):
+            td = step.get("transitDetails")
+            if td:
+                line = td.get("transitLine", {})
+                nm = line.get("nameShort") or line.get("name")
+                if nm:
+                    transit_lines.append(nm)
     return {
-        "distance_m": leg.get("distance", {}).get("value"),
-        "distance_text": leg.get("distance", {}).get("text"),
-        "duration_s": leg.get("duration", {}).get("value"),
-        "duration_text": leg.get("duration", {}).get("text"),
-        "summary": routes[0].get("summary", ""),
+        "duration_s": dur_s,
+        "distance_m": dist_m,
+        "duration_text": _fmt_duration(dur_s),
+        "distance_text": _fmt_distance(dist_m),
         "mode": mode,
+        "no_route": False,
+        "transit_lines": transit_lines,
     }
