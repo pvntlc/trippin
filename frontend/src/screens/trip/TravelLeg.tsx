@@ -95,7 +95,7 @@ export function TravelLeg({
             </View>
           ) : !from.planned_time ? (
             <View style={styles.warnBadge}>
-              <Text style={styles.warnBadgeText}>⚠️ 계획 시간 미설정 · 현재 시각 기준</Text>
+              <Text style={styles.warnBadgeText}>⚠️ 계획 시간 미설정 · 오전 9시 기준</Text>
             </View>
           ) : null}
         </TouchableOpacity>
