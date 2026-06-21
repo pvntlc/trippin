@@ -7,8 +7,8 @@ import { getItem, setItem, deleteItem } from "../services/storage";
 const TOKEN_KEY = "trippin_token";
 const LAST_ACTIVITY_KEY = "trippin_last_activity";
 
-// 미활동(아무 조작 없음) 30분 지나면 자동 로그아웃.
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+// 미활동(아무 조작 없음) 6시간 지나면 자동 로그아웃.
+const SESSION_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 
 type LogoutReason = "manual" | "expired" | "inactive";
 
