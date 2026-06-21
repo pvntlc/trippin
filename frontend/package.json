@@ -17,6 +17,7 @@
     "@tanstack/react-query": "^5.100.14",
     "@vis.gl/react-google-maps": "^1.8.3",
     "expo": "~56.0.7",
+    "expo-build-properties": "~56.0.19",
     "expo-constants": "~56.0.18",
     "expo-secure-store": "~56.0.4",
     "expo-status-bar": "~56.0.4",
