@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -59,8 +59,7 @@ export function PlaceSearchModal({
 }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
-  const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [debouncedQ, setDebouncedQ] = useState(""); // 타이핑 멈추면 자동 검색
   const [recCat, setRecCat] = useState(0);
   // 펼쳐진(선택된) 장소
   const [open, setOpen] = useState<{ place: PlaceSearchResult; category: string } | null>(null);
@@ -81,11 +80,21 @@ export function PlaceSearchModal({
     staleTime: 5 * 60_000,
   });
 
-  const searchMut = useMutation({
+  // 타이핑이 멈추면(350ms) 자동으로 검색 — 버튼 없이 실시간 갱신
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
+    return () => clearTimeout(t);
+  }, [q]);
+  useEffect(() => { setOpen(null); }, [debouncedQ]);
+
+  const { data: searchData, isFetching: searchLoading } = useQuery({
+    queryKey: ["search", debouncedQ, destination],
     // 검색어는 그대로, 목적지(near)로 그 지역 결과를 우선 (예: 도쿄 여행에서 "이치란")
-    mutationFn: () => mapsApi.search(q.trim(), destination || undefined),
-    onSuccess: (r) => { setSearchResults(r.results); setSearched(true); setOpen(null); },
+    queryFn: () => mapsApi.search(debouncedQ, destination || undefined),
+    enabled: visible && debouncedQ.length >= 1,
+    staleTime: 5 * 60_000,
   });
+  const searchResults = searchData?.results ?? [];
 
   // 펼친 장소의 리뷰 요약 + 사진 (분류·평점은 검색 결과에 이미 있음)
   const { data: summary, isFetching: summaryLoading } = useQuery({
@@ -114,7 +123,7 @@ export function PlaceSearchModal({
     },
   });
 
-  const reset = () => { setQ(""); setSearchResults([]); setSearched(false); setOpen(null); setTime(""); };
+  const reset = () => { setQ(""); setDebouncedQ(""); setOpen(null); setTime(""); };
 
   const toggle = (item: PlaceSearchResult, category: string) => {
     setTime(""); // 다른 장소 펼칠 때 시간 초기화
@@ -165,7 +174,7 @@ export function PlaceSearchModal({
       return da - db;
     });
   }
-  const loading = isSearchMode ? searchMut.isPending : recLoading;
+  const loading = isSearchMode ? searchLoading : recLoading;
 
   // 펼친 장소 갤러리: 검색 사진(즉시) + 상세 사진들(요약과 함께), 중복 제거
   const galleryRefs = (place: PlaceSearchResult): string[] => {
@@ -246,18 +255,20 @@ export function PlaceSearchModal({
               style={styles.input}
               placeholder="직접 검색 (예: 도톤보리, 우메다 스카이빌딩)"
               value={q}
-              onChangeText={(t) => { setQ(t); setSearched(false); }}
+              onChangeText={setQ}
               placeholderTextColor={Colors.textMuted}
-              onSubmitEditing={() => q.trim() && searchMut.mutate()}
+              onSubmitEditing={() => setDebouncedQ(q.trim())}
               returnKeyType="search"
+              autoCorrect={false}
             />
-            <TouchableOpacity
-              style={[styles.searchBtn, !q.trim() && styles.btnOff]}
-              onPress={() => q.trim() && searchMut.mutate()}
-              disabled={!q.trim() || searchMut.isPending}
-            >
-              <Text style={styles.searchBtnText}>검색</Text>
-            </TouchableOpacity>
+            {isSearchMode && (
+              <TouchableOpacity
+                style={styles.searchBtn}
+                onPress={() => { setQ(""); setDebouncedQ(""); }}
+              >
+                {searchLoading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.searchBtnText}>✕</Text>}
+              </TouchableOpacity>
+            )}
           </View>
 
           {!isSearchMode && !!destination && (
@@ -317,7 +328,7 @@ export function PlaceSearchModal({
               ListEmptyComponent={
                 <Text style={styles.empty}>
                   {isSearchMode
-                    ? (searched ? "결과가 없어요." : "")
+                    ? (debouncedQ ? "결과가 없어요." : "")
                     : (destination ? "추천 결과가 없어요." : "목적지를 설정하면 추천이 떠요. 위에서 검색해 보세요.")}
                 </Text>
               }
