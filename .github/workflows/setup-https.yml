@@ -1,0 +1,42 @@
+name: Setup Trippin HTTPS
+
+on:
+  push:
+    branches: [ ops/https ]
+
+jobs:
+  https:
+    name: nginx and certbot for trippin subdomain
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure HTTPS on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key:      ${{ secrets.OCI_SSH_KEY }}
+          port:     2222
+          script: |
+            set -e
+            DOMAIN=trippin.168-107-32-252.sslip.io
+            cd ~/trippin
+            echo "=== 저장소에서 nginx 설정 가져오기 ==="
+            git fetch origin ops/https
+            git show origin/ops/https:deploy/nginx-trippin.conf | sudo tee /etc/nginx/sites-available/trippin > /dev/null
+            sudo ln -sf /etc/nginx/sites-available/trippin /etc/nginx/sites-enabled/trippin
+            echo "=== nginx 문법검사 + reload (HTTP) ==="
+            sudo nginx -t
+            sudo systemctl reload nginx
+            echo "=== certbot HTTPS 인증서 발급 ==="
+            sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect --keep-until-expiring -m lightbulbtion@gmail.com || true
+            sudo nginx -t
+            sudo systemctl reload nginx
+            echo "=== 검증 (트리핀 https) ==="
+            curl -s -o /dev/null -w "trippin https /health: %{http_code}\n" https://$DOMAIN/health || true
+            echo -n "본문: "
+            curl -s https://$DOMAIN/health || true
+            echo ""
+            echo "=== 다른 사이트 영향 확인 ==="
+            curl -sk -o /dev/null -w "stock-manager(IP): %{http_code}\n" https://168.107.32.252/health || true
+            curl -sk -o /dev/null -w "date-with-munch: %{http_code}\n" https://168-107-32-252.sslip.io/ || true
+            ls -l /etc/nginx/sites-enabled/
