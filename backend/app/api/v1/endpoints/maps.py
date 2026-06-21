@@ -33,6 +33,20 @@ async def search(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
 
 
+@router.get("/autocomplete")
+async def autocomplete(
+    q: str = Query(min_length=1, description="입력어(부분어 OK)"),
+    near: str | None = Query(None, description="목적지명. 그 지역으로 예측 바이어스"),
+    language: str = "ko",
+    _: User = Depends(get_current_user),
+):
+    try:
+        loc = await gmaps.geocode(near) if near else None
+        return {"predictions": await gmaps.autocomplete(q, language, location=loc)}
+    except gmaps.GoogleMapsError as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+
+
 @router.get("/details/{place_id}")
 async def details(place_id: str, language: str = "ko", _: User = Depends(get_current_user)):
     try:
