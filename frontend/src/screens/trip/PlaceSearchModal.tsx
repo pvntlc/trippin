@@ -48,14 +48,15 @@ export function PlaceSearchModal({
 
   const { data: recData, isFetching: recLoading } = useQuery({
     queryKey: ["recommend", destination, cat.term],
-    queryFn: () => mapsApi.search(`${cat.term} ${destination}`),
+    // 목적지 좌표로 결과를 바이어스(언어/국가 무관, 해외도 정상 동작)
+    queryFn: () => mapsApi.search(cat.term, destination),
     enabled: visible && !isSearchMode && !!destination,
     staleTime: 5 * 60_000,
   });
 
   const searchMut = useMutation({
-    // 여행앱이므로 검색어에 목적지를 결합해 현지 결과 우선 (예: "이치란" → "이치란 도쿄")
-    mutationFn: () => mapsApi.search(destination ? `${q.trim()} ${destination}` : q.trim()),
+    // 검색어는 그대로, 목적지(near)로 그 지역 결과를 우선 (예: 도쿄 여행에서 "이치란")
+    mutationFn: () => mapsApi.search(q.trim(), destination || undefined),
     onSuccess: (r) => { setSearchResults(r.results); setSearched(true); setOpen(null); },
   });
 

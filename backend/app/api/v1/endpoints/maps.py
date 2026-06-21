@@ -21,12 +21,14 @@ _CACHE_TTL = timedelta(days=30)
 
 @router.get("/search")
 async def search(
-    q: str = Query(min_length=1, description="검색어 (예: '도쿄 라멘')"),
+    q: str = Query(min_length=1, description="검색어 (예: '라멘')"),
+    near: str | None = Query(None, description="목적지명(예: 'Tokyo'). 그 지역으로 결과 바이어스"),
     language: str = "ko",
     _: User = Depends(get_current_user),
 ):
     try:
-        return {"results": await gmaps.search_places(q, language)}
+        loc = await gmaps.geocode(near) if near else None
+        return {"results": await gmaps.search_places(q, language, location=loc)}
     except gmaps.GoogleMapsError as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
 

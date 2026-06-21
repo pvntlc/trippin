@@ -27,10 +27,37 @@ def _require_key() -> str:
     return settings.google_maps_api_key
 
 
-async def search_places(query: str, language: str = "ko") -> list[dict]:
-    """텍스트로 장소 검색. 간략화된 결과 리스트 반환."""
+# 목적지 문자열 → 좌표 캐시 (해외 검색을 그 지역으로 바이어스하기 위함)
+_geocode_cache: dict[str, tuple[float, float] | None] = {}
+
+
+async def geocode(place: str) -> tuple[float, float] | None:
+    """목적지명을 좌표로(첫 결과). 결과/실패 모두 캐시. 위치 바이어스용."""
+    if not place:
+        return None
+    key_ = place.strip().lower()
+    if key_ in _geocode_cache:
+        return _geocode_cache[key_]
+    try:
+        key = _require_key()
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(_PLACES_TEXT, params={"query": place, "key": key})
+        rs = resp.json().get("results", [])
+        loc = rs[0].get("geometry", {}).get("location", {}) if rs else {}
+        out = (loc["lat"], loc["lng"]) if loc.get("lat") is not None else None
+    except Exception:
+        out = None
+    _geocode_cache[key_] = out
+    return out
+
+
+async def search_places(query: str, language: str = "ko", location: tuple[float, float] | None = None) -> list[dict]:
+    """텍스트로 장소 검색. location 이 주어지면 그 좌표 주변(50km)으로 결과를 바이어스."""
     key = _require_key()
-    params = {"query": query, "language": language, "key": key}
+    params: dict = {"query": query, "language": language, "key": key}
+    if location:
+        params["location"] = f"{location[0]},{location[1]}"
+        params["radius"] = "50000"
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         resp = await client.get(_PLACES_TEXT, params=params)
     data = resp.json()
@@ -154,6 +181,113 @@ def _decode_polyline(encoded: str) -> list[list[float]]:
     return points
 
 
+def _iso_hhmm(iso: str) -> str:
+    """RFC3339('...T14:30:00-04:00') → 'HH:MM' (현지 시각)."""
+    return iso[11:16] if iso and len(iso) >= 16 else ""
+
+
+_CUR_SYM = {"USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥", "KRW": "₩", "AUD": "A$", "CAD": "C$"}
+
+
+def _fmt_fare(fare: dict | None) -> str | None:
+    if not fare:
+        return None
+    cur = fare.get("currencyCode", "")
+    units = int(fare.get("units", 0) or 0)
+    amount = units + (fare.get("nanos", 0) or 0) / 1e9
+    sym = _CUR_SYM.get(cur)
+    if sym:
+        return f"{sym}{amount:.2f}" if amount % 1 else f"{sym}{int(amount)}"
+    return f"{amount:.2f} {cur}".strip()
+
+
+async def _google_transit(origin: str, destination: str, language: str, key: str) -> dict:
+    """비일본 대중교통 — Google Routes(여러 대안)를 NAVITIME 과 같은 형식(options/steps/stations)으로 변환."""
+    body = {
+        "origin": _parse_latlng(origin),
+        "destination": _parse_latlng(destination),
+        "travelMode": "TRANSIT",
+        "computeAlternativeRoutes": True,
+        "languageCode": language,
+        "departureTime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 120)),
+    }
+    field_mask = (
+        "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,"
+        "routes.travelAdvisory.transitFare,"
+        "routes.legs.steps.travelMode,routes.legs.steps.staticDuration,"
+        "routes.legs.steps.transitDetails.transitLine.name,"
+        "routes.legs.steps.transitDetails.transitLine.nameShort,"
+        "routes.legs.steps.transitDetails.stopDetails"
+    )
+    headers = {"Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": field_mask}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.post(_ROUTES_API, json=body, headers=headers)
+    data = resp.json()
+    if resp.status_code != 200:
+        raise GoogleMapsError(f"Routes(transit) 실패: {data.get('error', {}).get('message', resp.status_code)}")
+
+    options: list[dict] = []
+    for rt in data.get("routes", []):
+        steps: list[dict] = []
+        stations: list[dict] = []
+        walk_secs = 0  # 연속 도보 구간 합산
+
+        def _flush_walk():
+            nonlocal walk_secs
+            mins = round(walk_secs / 60)
+            if mins >= 1:
+                steps.append({"mode": "walk", "line": "", "from_time": "", "to_time": "",
+                              "from_name": "", "to_name": "", "duration_text": f"{mins}분"})
+            walk_secs = 0
+
+        for leg in rt.get("legs", []):
+            for step in leg.get("steps", []):
+                if step.get("travelMode") == "TRANSIT":
+                    _flush_walk()
+                    td = step.get("transitDetails", {})
+                    sd = td.get("stopDetails", {})
+                    line = td.get("transitLine", {})
+                    nm = line.get("nameShort") or line.get("name") or "대중교통"
+                    dep_stop = sd.get("departureStop", {}).get("name", "")
+                    arr_stop = sd.get("arrivalStop", {}).get("name", "")
+                    steps.append({
+                        "mode": "transit", "line": nm,
+                        "from_time": _iso_hhmm(sd.get("departureTime", "")),
+                        "to_time": _iso_hhmm(sd.get("arrivalTime", "")),
+                        "from_name": dep_stop, "to_name": arr_stop, "duration_text": None,
+                    })
+                    for nm2, st, is_dep in ((dep_stop, sd.get("departureStop", {}), True),
+                                            (arr_stop, sd.get("arrivalStop", {}), False)):
+                        loc = st.get("location", {}).get("latLng", {})
+                        if nm2 and loc.get("latitude") is not None:
+                            stations.append({"name": nm2, "lat": loc["latitude"], "lng": loc["longitude"], "board": is_dep})
+                else:
+                    walk_secs += int(str(step.get("staticDuration", "0s")).rstrip("s") or 0)
+        _flush_walk()
+        transit_steps = [s for s in steps if s["mode"] == "transit"]
+        dur_s = int(str(rt.get("duration", "0s")).rstrip("s") or 0)
+        options.append({
+            "duration_text": _fmt_duration(dur_s),
+            "fare_text": _fmt_fare(rt.get("travelAdvisory", {}).get("transitFare")),
+            "transfers": max(0, len(transit_steps) - 1),
+            "depart": transit_steps[0]["from_time"] if transit_steps else "",
+            "arrive": transit_steps[-1]["to_time"] if transit_steps else "",
+            "steps": steps,
+            "shape": _decode_polyline(rt.get("polyline", {}).get("encodedPolyline", "")),
+            "stations": stations,
+        })
+    if not options:
+        return {"duration_text": None, "distance_text": None, "mode": "transit",
+                "no_route": True, "transit_lines": [], "options": [], "polyline": [], "stations": []}
+    best = options[0]
+    return {
+        "duration_text": best["duration_text"], "distance_text": None, "fare_text": best["fare_text"],
+        "mode": "transit", "no_route": False,
+        "transit_lines": [s["line"] for s in best["steps"] if s["mode"] == "transit"],
+        "options": options, "polyline": best["shape"], "stations": best["stations"],
+    }
+
+
 async def directions(origin: str, destination: str, mode: str = "walking", language: str = "ko", depart: str | None = None) -> dict:
     """두 지점('lat,lng') 간 경로/소요시간 — Routes API.
 
@@ -161,15 +295,17 @@ async def directions(origin: str, destination: str, mode: str = "walking", langu
     대중교통은 노선 정보(transit_lines)도 반환.
     일본 대중교통은 구글 미지원 → NAVITIME 으로 처리(키 있을 때).
     """
-    # 일본 대중교통 → NAVITIME (구글은 일본 transit 미지원)
+    key = _require_key()
+
+    # 대중교통: 일본=NAVITIME(구글 미지원), 그 외=Google Routes 를 options 형식으로
     if mode == "transit":
         from app.services import navitime
         if navitime.in_japan(origin) and settings.navitime_api_key:
             nav = await navitime.transit_route(origin, destination, depart)
             if nav is not None:
                 return nav
+        return await _google_transit(origin, destination, language, key)
 
-    key = _require_key()
     travel_mode = _MODE_MAP.get(mode, "WALK")
     body: dict = {
         "origin": _parse_latlng(origin),
