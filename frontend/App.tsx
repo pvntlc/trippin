@@ -35,7 +35,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 };
 
 function Root() {
-  const { token, loading } = useAuth();
+  const { token, loading, markActivity } = useAuth();
 
   if (loading) {
     return (
@@ -48,7 +48,7 @@ function Root() {
   if (!token) return <LoginScreen />;
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer linking={linking} onStateChange={markActivity}>
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: Colors.bgCard },

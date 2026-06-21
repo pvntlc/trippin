@@ -35,15 +35,38 @@ function Routes({ routes }: { routes: MapRoute[] }) {
   return null;
 }
 
-// 역 마커 — 잘 보이게 큰 핀(SVG) + 큰 역명 라벨
-const STATION_PIN =
-  "data:image/svg+xml;charset=UTF-8," +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">' +
-      '<path d="M17 1C8.7 1 2 7.7 2 16c0 10.5 15 26 15 26s15-15.5 15-26C32 7.7 25.3 1 17 1z" fill="#0ea5e9" stroke="#ffffff" stroke-width="2.5"/>' +
-      '<circle cx="17" cy="16" r="6.5" fill="#ffffff"/>' +
-      "</svg>"
-  );
+function escapeXml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// 역 마커 = 흰색 알약 라벨(역명) + 아래 핀. 한 장의 SVG 로 그려 어떤 지도 위에서도
+// 글자가 또렷하게 보이도록 한다. (구글 기본 라벨은 배경이 없어 가독성이 낮음)
+function stationIcon(g: any, name: string) {
+  // 글자 폭 추정: 한글·CJK·가나는 넓게(15), 그 외(영문/숫자/공백) 좁게(8.5)
+  let tw = 0;
+  for (const ch of name) {
+    tw += /[ᄀ-ᇿ　-ヿ㄰-㆏가-힣一-鿿＀-￯]/.test(ch) ? 15 : 8.5;
+  }
+  const pillW = Math.max(Math.ceil(tw) + 26, 40);
+  const W = pillW;
+  const H = 64;
+  const cx = W / 2;
+  const pinX = cx - 17 * 0.82; // 34폭 핀을 0.82배(≈28)로 중앙 정렬
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+    `<rect x="${(cx - pillW / 2).toFixed(1)}" y="1" width="${pillW}" height="22" rx="11" fill="#ffffff" stroke="#0ea5e9" stroke-width="1.5"/>` +
+    `<text x="${cx}" y="16.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="13" font-weight="700" fill="#0c4a6e">${escapeXml(name)}</text>` +
+    `<g transform="translate(${pinX.toFixed(1)} 27) scale(0.82)">` +
+    `<path d="M17 1C8.7 1 2 7.7 2 16c0 10.5 15 26 15 26s15-15.5 15-26C32 7.7 25.3 1 17 1z" fill="#0ea5e9" stroke="#ffffff" stroke-width="2.5"/>` +
+    `<circle cx="17" cy="16" r="6.5" fill="#ffffff"/>` +
+    `</g>` +
+    `</svg>`;
+  return {
+    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+    scaledSize: new g.maps.Size(W, H),
+    anchor: new g.maps.Point(cx, H),
+  };
+}
 
 function Stations({ stations }: { stations: MapStation[] }) {
   const map = useMap();
@@ -56,13 +79,7 @@ function Stations({ stations }: { stations: MapStation[] }) {
           position: { lat: s.lat, lng: s.lng },
           map,
           title: s.name,
-          label: { text: `🚉 ${s.name}`, fontSize: "13px", fontWeight: "800", color: "#0c4a6e" },
-          icon: {
-            url: STATION_PIN,
-            scaledSize: new g.maps.Size(34, 44),
-            anchor: new g.maps.Point(17, 44),
-            labelOrigin: new g.maps.Point(17, 55),
-          },
+          icon: stationIcon(g, s.name),
           zIndex: 999,
         })
     );
