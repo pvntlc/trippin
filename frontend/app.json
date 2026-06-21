@@ -26,7 +26,12 @@
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Trippin",
+      "shortName": "Trippin",
+      "description": "해외여행 일정을 한 곳에서",
+      "themeColor": "#1f8fd6",
+      "backgroundColor": "#1f8fd6"
     },
     "extra": {
       "eas": {

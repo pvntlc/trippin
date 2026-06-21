@@ -79,6 +79,6 @@ async function render(svg, file, size = 1024) {
   await render(fg, "adaptive-icon.png");
   await render(bg, "adaptive-bg.png");
   await render(splash, "splash-icon.png");
-  await render(iconFull, "favicon.png", 96);
+  await render(iconFull, "favicon.png", 192);
   console.log("아이콘 생성 완료 →", OUT);
 })();
