@@ -6,7 +6,7 @@ import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
 
 export function LoginScreen() {
-  const { login, register } = useAuth();
+  const { login, register, sessionMessage } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,6 +53,12 @@ export function LoginScreen() {
       <Image source={require("../../assets/icon.png")} style={styles.logoImg} />
       <Text style={styles.logo}>Trippin</Text>
       <Text style={styles.subtitle}>해외여행 일정을 한 곳에서</Text>
+
+      {!!sessionMessage && !error && (
+        <View style={styles.noticeBox}>
+          <Text style={styles.noticeText}>{sessionMessage}</Text>
+        </View>
+      )}
 
       {mode === "register" && (
         <TextInput
@@ -130,6 +136,8 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: "700" },
   hint: { color: Colors.textMuted, fontSize: 12, marginTop: -4, marginBottom: 8, marginLeft: 4 },
+  noticeBox: { backgroundColor: "#eff6ff", borderColor: Colors.accent, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16 },
+  noticeText: { color: Colors.accentDeep, fontSize: 13.5, fontWeight: "600", textAlign: "center" },
   errorBox: { backgroundColor: "#fef2f2", borderColor: Colors.danger, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4 },
   errorText: { color: Colors.danger, fontSize: 13.5, fontWeight: "600", textAlign: "center" },
   switch: { color: Colors.accentDeep, textAlign: "center", marginTop: 20, fontSize: 14 },

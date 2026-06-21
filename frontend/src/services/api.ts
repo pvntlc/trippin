@@ -14,6 +14,34 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+// 서버가 토큰을 거부(401)하면 호출됨 → 인증 스토어가 자동 로그아웃 처리.
+let onUnauthorized: (() => void) | null = null;
+export function setOnUnauthorized(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
+// JWT payload 의 exp(초)를 ms 로. 파싱 실패 시 null.
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    let b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const json =
+      typeof atob === "function"
+        ? atob(b64)
+        : // RN/Node 폴백
+          (globalThis as any).Buffer?.from(b64, "base64").toString("binary") ?? "";
+    return json ? JSON.parse(json) : null;
+  } catch {
+    return null;
+  }
+}
+export function tokenExpiryMs(token: string): number | null {
+  const p = decodeJwtPayload(token);
+  return p && typeof p.exp === "number" ? p.exp * 1000 : null;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}/api/v1${path}`, {
     ...options,
@@ -24,6 +52,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
   if (!res.ok) {
+    // 토큰 만료/무효 → 자동 로그아웃 트리거 (로그인 요청 자체는 제외)
+    if (res.status === 401 && authToken) onUnauthorized?.();
     throw new Error(await errorMessage(res));
   }
   if (res.status === 204) return undefined as T;
