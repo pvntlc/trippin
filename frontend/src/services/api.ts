@@ -234,11 +234,19 @@ export type TransitStep = {
 };
 export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[]; shape?: LatLngTuple[]; stations?: TransitStation[] };
 
+export type Prediction = { place_id: string; name: string; secondary: string; types?: string[] };
+
 export const mapsApi = {
   search: (q: string, near?: string) =>
     request<{ results: PlaceSearchResult[] }>(
       `/maps/search?q=${encodeURIComponent(q)}` + (near ? `&near=${encodeURIComponent(near)}` : "")
     ),
+  autocomplete: (q: string, near?: string) =>
+    request<{ predictions: Prediction[] }>(
+      `/maps/autocomplete?q=${encodeURIComponent(q)}` + (near ? `&near=${encodeURIComponent(near)}` : "")
+    ),
+  placeDetails: (placeId: string) =>
+    request<PlaceSearchResult & { website?: string; phone?: string }>(`/maps/details/${encodeURIComponent(placeId)}`),
   placeSummary: (placeId: string) =>
     request<PlaceSummary>(`/maps/place/${encodeURIComponent(placeId)}/summary`),
   directions: (origin: string, destination: string, mode: "walking" | "driving" | "transit", depart?: string) =>

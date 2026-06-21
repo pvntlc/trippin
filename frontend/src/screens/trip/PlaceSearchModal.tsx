@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult } from "../../services/api";
+import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult, type Prediction } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { placeTypeLabel } from "../../utils/placeTypes";
 import { TimePicker } from "../../components/TimePicker";
@@ -87,14 +87,30 @@ export function PlaceSearchModal({
   }, [q]);
   useEffect(() => { setOpen(null); }, [debouncedQ]);
 
-  const { data: searchData, isFetching: searchLoading } = useQuery({
-    queryKey: ["search", debouncedQ, destination],
-    // 검색어는 그대로, 목적지(near)로 그 지역 결과를 우선 (예: 도쿄 여행에서 "이치란")
-    queryFn: () => mapsApi.search(debouncedQ, destination || undefined),
+  // 구글맵식 자동완성 예측(부분어/오타에 강함). 목적지로 지역 바이어스.
+  const { data: acData, isFetching: searchLoading } = useQuery({
+    queryKey: ["autocomplete", debouncedQ, destination],
+    queryFn: () => mapsApi.autocomplete(debouncedQ, destination || undefined),
     enabled: visible && debouncedQ.length >= 1,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
   });
-  const searchResults = searchData?.results ?? [];
+  const predictions = acData?.predictions ?? [];
+
+  // 예측을 탭하면 상세(좌표·사진·평점)를 받아 펼침
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const pickPrediction = async (p: Prediction) => {
+    if (open?.place.google_place_id === p.place_id) { setOpen(null); return; }
+    setTime("");
+    setPendingId(p.place_id);
+    try {
+      const place = await mapsApi.placeDetails(p.place_id);
+      setOpen({ place, category: "" });
+    } catch {
+      // 무시
+    } finally {
+      setPendingId(null);
+    }
+  };
 
   // 펼친 장소의 리뷰 요약 + 사진 (분류·평점은 검색 결과에 이미 있음)
   const { data: summary, isFetching: summaryLoading } = useQuery({
@@ -166,14 +182,16 @@ export function PlaceSearchModal({
     : sortMode === "pick" ? (() => { const p = coordPlaces.find((x) => x.id === pickId); return p ? { lat: p.lat as number, lng: p.lng as number } : null; })()
     : null;
 
-  let list = (isSearchMode ? searchResults : recData?.results ?? []).filter(isRealPlace);
+  // 추천(카테고리) 결과: 행정구역 제외 + 거리순 정렬. 검색은 자동완성 예측을 그대로.
+  let recList = (recData?.results ?? []).filter(isRealPlace);
   if (refCoord) {
-    list = [...list].sort((a, b) => {
+    recList = [...recList].sort((a, b) => {
       const da = a.lat != null && a.lng != null ? haversineKm(refCoord, { lat: a.lat, lng: a.lng }) : Infinity;
       const db = b.lat != null && b.lng != null ? haversineKm(refCoord, { lat: b.lat, lng: b.lng }) : Infinity;
       return da - db;
     });
   }
+  const list: (PlaceSearchResult | Prediction)[] = isSearchMode ? predictions : recList;
   const loading = isSearchMode ? searchLoading : recLoading;
 
   // 펼친 장소 갤러리: 검색 사진(즉시) + 상세 사진들(요약과 함께), 중복 제거
@@ -281,7 +299,7 @@ export function PlaceSearchModal({
             </View>
           )}
 
-          {list.length > 0 && (
+          {!isSearchMode && recList.length > 0 && (
             <View>
               <View style={styles.sortRow}>
                 <Text style={styles.sortLabel}>거리순</Text>
@@ -323,7 +341,7 @@ export function PlaceSearchModal({
           ) : (
             <FlatList
               data={list}
-              keyExtractor={(r) => r.google_place_id}
+              keyExtractor={(r) => (isSearchMode ? (r as Prediction).place_id : (r as PlaceSearchResult).google_place_id)}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
                 <Text style={styles.empty}>
@@ -333,28 +351,48 @@ export function PlaceSearchModal({
                 </Text>
               }
               renderItem={({ item }) => {
-                const itemCat = isSearchMode ? "" : cat.category;
-                const isOpen = open?.place.google_place_id === item.google_place_id;
+                // 검색 모드: 자동완성 예측(좌표 없음) — 탭하면 상세를 받아 펼침
+                if (isSearchMode) {
+                  const p = item as Prediction;
+                  const isOpen = open?.place.google_place_id === p.place_id;
+                  return (
+                    <View style={[styles.itemWrap, isOpen && styles.itemWrapOpen]}>
+                      <TouchableOpacity style={styles.resultRow} onPress={() => pickPrediction(p)}>
+                        <View style={[styles.thumb, styles.thumbEmpty]}><Text style={styles.thumbIcon}>📍</Text></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.resultName}>{p.name}</Text>
+                          {!!p.secondary && <Text style={styles.resultAddr} numberOfLines={1}>{p.secondary}</Text>}
+                        </View>
+                        {pendingId === p.place_id && <ActivityIndicator color={Colors.accent} />}
+                      </TouchableOpacity>
+                      {isOpen && open && renderDetail(open.place, "")}
+                    </View>
+                  );
+                }
+                // 추천 모드: 검색결과 객체(사진·평점·좌표 포함)
+                const r2 = item as PlaceSearchResult;
+                const itemCat = cat.category;
+                const isOpen = open?.place.google_place_id === r2.google_place_id;
                 return (
                   <View style={[styles.itemWrap, isOpen && styles.itemWrapOpen]}>
-                    <TouchableOpacity style={styles.resultRow} onPress={() => toggle(item, itemCat)}>
-                      {placePhotoUrl(item.photo_reference, 120) ? (
-                        <Image source={{ uri: placePhotoUrl(item.photo_reference, 120)! }} style={styles.thumb} />
+                    <TouchableOpacity style={styles.resultRow} onPress={() => toggle(r2, itemCat)}>
+                      {placePhotoUrl(r2.photo_reference, 120) ? (
+                        <Image source={{ uri: placePhotoUrl(r2.photo_reference, 120)! }} style={styles.thumb} />
                       ) : (
                         <View style={[styles.thumb, styles.thumbEmpty]}><Text style={styles.thumbIcon}>📍</Text></View>
                       )}
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.resultName}>{item.name}</Text>
+                        <Text style={styles.resultName}>{r2.name}</Text>
                         <Text style={styles.resultAddr} numberOfLines={1}>
-                          {placeTypeLabel(item.types)} · {item.address}
+                          {placeTypeLabel(r2.types)} · {r2.address}
                         </Text>
                       </View>
-                      {refCoord && item.lat != null && item.lng != null && (
-                        <Text style={styles.distBadge}>{kmText(haversineKm(refCoord, { lat: item.lat, lng: item.lng }))}</Text>
+                      {refCoord && r2.lat != null && r2.lng != null && (
+                        <Text style={styles.distBadge}>{kmText(haversineKm(refCoord, { lat: r2.lat, lng: r2.lng }))}</Text>
                       )}
-                      {item.rating != null && <Text style={styles.rating}>★ {item.rating}</Text>}
+                      {r2.rating != null && <Text style={styles.rating}>★ {r2.rating}</Text>}
                     </TouchableOpacity>
-                    {isOpen && renderDetail(item, itemCat)}
+                    {isOpen && renderDetail(r2, itemCat)}
                   </View>
                 );
               }}

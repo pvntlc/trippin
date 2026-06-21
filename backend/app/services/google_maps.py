@@ -12,6 +12,7 @@ from app.core.config import settings
 
 _PLACES_TEXT = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 _PLACE_DETAILS = "https://maps.googleapis.com/maps/api/place/details/json"
+_AUTOCOMPLETE = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
 _DIRECTIONS = "https://maps.googleapis.com/maps/api/directions/json"
 
 _TIMEOUT = httpx.Timeout(10.0)
@@ -83,10 +84,34 @@ async def search_places(query: str, language: str = "ko", location: tuple[float,
     return results
 
 
-async def place_details(place_id: str, language: str = "ko") -> dict:
-    """place_id 로 상세 정보 조회."""
+async def autocomplete(query: str, language: str = "ko", location: tuple[float, float] | None = None) -> list[dict]:
+    """입력어로 장소 자동완성 예측. 부분어/오타에 강함(구글맵식 검색). location 으로 지역 바이어스."""
     key = _require_key()
-    fields = "place_id,name,formatted_address,geometry,rating,opening_hours,website,formatted_phone_number,photos"
+    params: dict = {"input": query, "language": language, "key": key}
+    if location:
+        params["location"] = f"{location[0]},{location[1]}"
+        params["radius"] = "50000"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.get(_AUTOCOMPLETE, params=params)
+    data = resp.json()
+    if data.get("status") not in ("OK", "ZERO_RESULTS"):
+        raise GoogleMapsError(f"자동완성 실패: {data.get('status')} {data.get('error_message', '')}")
+    out = []
+    for p in data.get("predictions", []):
+        sf = p.get("structured_formatting", {})
+        out.append({
+            "place_id": p.get("place_id"),
+            "name": sf.get("main_text") or p.get("description", ""),
+            "secondary": sf.get("secondary_text", ""),
+            "types": p.get("types", []),
+        })
+    return out
+
+
+async def place_details(place_id: str, language: str = "ko") -> dict:
+    """place_id 로 상세 정보 조회. (자동완성 예측 선택 시 좌표/사진 등 채우기에도 사용)"""
+    key = _require_key()
+    fields = "place_id,name,formatted_address,geometry,rating,types,opening_hours,website,formatted_phone_number,photos"
     params = {"place_id": place_id, "fields": fields, "language": language, "key": key}
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         resp = await client.get(_PLACE_DETAILS, params=params)
@@ -95,6 +120,7 @@ async def place_details(place_id: str, language: str = "ko") -> dict:
         raise GoogleMapsError(f"Place 상세 실패: {data.get('status')}")
     r = data.get("result", {})
     loc = r.get("geometry", {}).get("location", {})
+    photos = r.get("photos", [])
     return {
         "google_place_id": r.get("place_id"),
         "name": r.get("name"),
@@ -102,6 +128,8 @@ async def place_details(place_id: str, language: str = "ko") -> dict:
         "lat": loc.get("lat"),
         "lng": loc.get("lng"),
         "rating": r.get("rating"),
+        "types": r.get("types", []),
+        "photo_reference": photos[0].get("photo_reference") if photos else None,
         "website": r.get("website"),
         "phone": r.get("formatted_phone_number"),
         "opening_hours": r.get("opening_hours", {}).get("weekday_text", []),
