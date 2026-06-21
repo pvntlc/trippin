@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { placeApi, type Place } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { TimePicker } from "../../components/TimePicker";
+import { PlaceDetailInfo } from "../../components/PlaceDetailInfo";
 
 const CATEGORIES = ["관광", "식비", "카페", "숙박", "쇼핑", "기타"];
 
@@ -70,6 +71,9 @@ export function PlaceEditModal({
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled">
+            {!!place?.address && <Text style={styles.addr}>{place.address}</Text>}
+            <PlaceDetailInfo googlePlaceId={place?.google_place_id ?? null} />
+
             <Text style={styles.label}>시간</Text>
             <TimePicker value={time} onChange={setTime} />
 
@@ -126,6 +130,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   title: { fontSize: 18, fontWeight: "700", color: Colors.text, flex: 1, marginRight: 12 },
   close: { color: Colors.textMuted, fontSize: 14 },
+  addr: { fontSize: 12.5, color: Colors.textMuted, marginBottom: 10 },
   label: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 16, marginBottom: 8 },
   input: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.text },
   noteInput: { minHeight: 72, textAlignVertical: "top" },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
 import { mapsApi, type Place, type TransitOption } from "../../services/api";
@@ -31,6 +31,7 @@ export function TransitModal({
   onClose: () => void;
 }) {
   const [depart, setDepart] = useState<string>(DEFAULT_DEPART);
+  const [manualArrive, setManualArrive] = useState<string>(""); // 경로 없을 때 직접 입력
   // 출발지에 계획 시간이 없으면 기본(오전 9시) 기준(=경고 대상)
   const noPlan = !from?.planned_time;
 
@@ -48,6 +49,20 @@ export function TransitModal({
   });
 
   const options = data?.options ?? [];
+
+  // 경로 정보가 없을 때 출발/도착 시각을 직접 입력해 저장
+  const saveManual = () => {
+    const arr = manualArrive.trim();
+    if (!/^\d{1,2}:\d{2}$/.test(arr)) return;
+    const [dh, dm] = depart.split(":").map(Number);
+    const [ah, am] = arr.split(":").map(Number);
+    let mins = ah * 60 + am - (dh * 60 + dm);
+    if (mins < 0) mins += 1440;
+    onSelect({
+      duration_text: mins > 0 ? `${mins}분` : null,
+      fare_text: null, transfers: 0, depart, arrive: arr, steps: [],
+    });
+  };
 
   // 구글맵 대중교통 길찾기 열기 (출발/도착 좌표 + transit 모드)
   const openGoogleMaps = () => {
@@ -89,7 +104,23 @@ export function TransitModal({
           {isFetching ? (
             <ActivityIndicator color={Colors.accent} style={{ marginVertical: 30 }} />
           ) : options.length === 0 ? (
-            <Text style={styles.empty}>이 시간대 경로가 없어요. ◀▶로 시간을 바꿔보세요.</Text>
+            <View style={styles.manualBox}>
+              <Text style={styles.empty}>이 시간대 경로가 없어요. ◀▶로 시간을 바꾸거나, 직접 입력하세요.</Text>
+              <View style={styles.manualRow}>
+                <Text style={styles.manualLabel}>{depart} 출발 →</Text>
+                <TextInput
+                  style={styles.manualInput}
+                  placeholder="도착 HH:MM"
+                  value={manualArrive}
+                  onChangeText={setManualArrive}
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="numbers-and-punctuation"
+                />
+                <TouchableOpacity style={styles.manualSave} onPress={saveManual}>
+                  <Text style={styles.manualSaveText}>저장</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : (
             <ScrollView style={{ maxHeight: 380 }} keyboardShouldPersistTaps="handled">
               {options.map((o, i) => {
@@ -146,7 +177,13 @@ const styles = StyleSheet.create({
   gmapsText: { color: "#1a73e8", fontSize: 14, fontWeight: "700" },
   warnBox: { backgroundColor: Colors.warnBg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12 },
   warnText: { fontSize: 12.5, color: Colors.warn, fontWeight: "600", lineHeight: 18 },
-  empty: { textAlign: "center", color: Colors.textMuted, marginVertical: 30, paddingHorizontal: 20, lineHeight: 20 },
+  empty: { textAlign: "center", color: Colors.textMuted, marginTop: 20, marginBottom: 14, paddingHorizontal: 20, lineHeight: 20 },
+  manualBox: { paddingBottom: 10 },
+  manualRow: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  manualLabel: { fontSize: 14, fontWeight: "700", color: Colors.text },
+  manualInput: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: Colors.text, width: 110, textAlign: "center" },
+  manualSave: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  manualSaveText: { color: Colors.white, fontWeight: "700", fontSize: 14 },
   opt: { borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, marginBottom: 10 },
   optChosen: { borderColor: Colors.accent, backgroundColor: "#f0f9ff" },
   optTop: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 6 },
