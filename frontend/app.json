@@ -16,6 +16,12 @@
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3b3a7626-db68-4be8-b73f-ab1e386553e3"
+      }
+    },
+    "owner": "pvntic"
   }
 }
