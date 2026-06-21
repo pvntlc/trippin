@@ -235,8 +235,10 @@ export type TransitStep = {
 export type TransitOption = { duration_text: string | null; fare_text: string | null; transfers: number; depart: string; arrive: string; steps: TransitStep[]; shape?: LatLngTuple[]; stations?: TransitStation[] };
 
 export const mapsApi = {
-  search: (q: string) =>
-    request<{ results: PlaceSearchResult[] }>(`/maps/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, near?: string) =>
+    request<{ results: PlaceSearchResult[] }>(
+      `/maps/search?q=${encodeURIComponent(q)}` + (near ? `&near=${encodeURIComponent(near)}` : "")
+    ),
   placeSummary: (placeId: string) =>
     request<PlaceSummary>(`/maps/place/${encodeURIComponent(placeId)}/summary`),
   directions: (origin: string, destination: string, mode: "walking" | "driving" | "transit", depart?: string) =>
