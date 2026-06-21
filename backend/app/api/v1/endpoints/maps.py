@@ -76,7 +76,7 @@ async def place_summary(
         info = await gmaps.place_reviews(place_id)
     except gmaps.GoogleMapsError as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
-    summary = await summarize_reviews(info["name"], info["reviews"])
+    summary = await summarize_reviews(info["name"], info["reviews"], info.get("types"))
     photos = info["photo_refs"]
     photos_json = json.dumps(photos)
 
