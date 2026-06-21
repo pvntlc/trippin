@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -11,6 +12,7 @@ import { MapTab } from "./trip/MapTab";
 import { BudgetTab } from "./trip/BudgetTab";
 import { ChecklistTab } from "./trip/ChecklistTab";
 import { MembersModal } from "./trip/MembersModal";
+import { NewTripModal } from "./trip/NewTripModal";
 import type { RootStackParamList } from "../../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TripDetail">;
@@ -33,6 +35,7 @@ export function TripDetailScreen({ route, navigation }: Props) {
   const [transitChoices, setTransitChoices] = useState<Record<string, TransitOption>>({});
   const [showMembers, setShowMembers] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: trip, isLoading } = useQuery({ queryKey: ["trip", tripId], queryFn: () => tripApi.get(tripId) });
@@ -54,7 +57,7 @@ export function TripDetailScreen({ route, navigation }: Props) {
   const closeActions = () => { setShowActions(false); setConfirmDelete(false); };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <View style={styles.summary}>
         <View style={{ flex: 1 }}>
           <Text style={styles.dest}>{trip.destination || trip.title}</Text>
@@ -94,11 +97,17 @@ export function TripDetailScreen({ route, navigation }: Props) {
       </View>
 
       <MembersModal tripId={tripId} canEdit={canEdit} visible={showMembers} onClose={() => setShowMembers(false)} />
+      <NewTripModal visible={showEdit} editTrip={trip} onClose={() => setShowEdit(false)} />
 
       <Modal visible={showActions} transparent animationType="fade" onRequestClose={closeActions}>
         <TouchableOpacity style={styles.actionsBg} activeOpacity={1} onPress={closeActions}>
           <View style={styles.actionsSheet}>
             <Text style={styles.actionsTitle}>{trip.title}</Text>
+            {canEdit && (
+              <TouchableOpacity style={styles.editRow} onPress={() => { closeActions(); setShowEdit(true); }}>
+                <Text style={styles.editRowText}>✏️  여행 정보 수정 (이름·목적지·날짜)</Text>
+              </TouchableOpacity>
+            )}
             {isOwner ? (
               <TouchableOpacity
                 style={[styles.deleteRow, confirmDelete && styles.deleteRowConfirm]}
@@ -118,7 +127,7 @@ export function TripDetailScreen({ route, navigation }: Props) {
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -135,6 +144,8 @@ const styles = StyleSheet.create({
   actionsBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   actionsSheet: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28 },
   actionsTitle: { fontSize: 16, fontWeight: "700", color: Colors.text, marginBottom: 14 },
+  editRow: { paddingVertical: 15, borderRadius: 12, alignItems: "center", backgroundColor: Colors.bgCardAlt, marginBottom: 8 },
+  editRowText: { color: Colors.accentDeep, fontSize: 15, fontWeight: "700" },
   deleteRow: { paddingVertical: 15, borderRadius: 12, alignItems: "center", backgroundColor: "#fef2f2" },
   deleteRowConfirm: { backgroundColor: Colors.danger },
   deleteRowText: { color: Colors.danger, fontSize: 15, fontWeight: "700" },

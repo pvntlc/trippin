@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView,
 import { Calendar } from "react-native-calendars";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { tripApi, mapsApi, type PlaceSearchResult } from "../../services/api";
+import { tripApi, mapsApi, type PlaceSearchResult, type Trip } from "../../services/api";
 import { Colors } from "../../constants/colors";
 
 const CURRENCIES = ["KRW", "JPY", "USD", "EUR"];
@@ -21,8 +21,17 @@ function addDays(iso: string, n: number) {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
-export function NewTripModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function NewTripModal({
+  visible,
+  onClose,
+  editTrip,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  editTrip?: Trip | null;
+}) {
   const qc = useQueryClient();
+  const isEdit = !!editTrip;
   const [title, setTitle] = useState("");
   const [destination, setDestination] = useState("");
   const [destQuery, setDestQuery] = useState("");
@@ -37,6 +46,20 @@ export function NewTripModal({ visible, onClose }: { visible: boolean; onClose: 
     setTitle(""); setDestination(""); setDestQuery(""); setSuggestions([]);
     setStart(""); setEnd(""); setCurrency("USD"); setError(null);
   };
+
+  // 수정 모드: 열릴 때 기존 값으로 채움
+  useEffect(() => {
+    if (visible && editTrip) {
+      setTitle(editTrip.title);
+      setDestination(editTrip.destination);
+      setDestQuery(editTrip.destination);
+      setStart(editTrip.start_date);
+      setEnd(editTrip.end_date);
+      setCurrency(editTrip.currency);
+      setError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, editTrip?.id]);
 
   // 목적지 자동완성 (디바운스)
   useEffect(() => {
@@ -58,14 +81,17 @@ export function NewTripModal({ visible, onClose }: { visible: boolean; onClose: 
   }, [destQuery, destination]);
 
   const createMut = useMutation({
-    mutationFn: () =>
-      tripApi.create({ title: title.trim(), destination: destination.trim(), start_date: start, end_date: end, currency }),
+    mutationFn: () => {
+      const data = { title: title.trim(), destination: destination.trim(), start_date: start, end_date: end, currency };
+      return isEdit ? tripApi.update(editTrip!.id, data) : tripApi.create(data);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["trips"] });
+      if (isEdit) qc.invalidateQueries({ queryKey: ["trip", editTrip!.id] });
       reset();
       onClose();
     },
-    onError: (e: any) => setError(e?.message ?? "생성 실패"),
+    onError: (e: any) => setError(e?.message ?? (isEdit ? "수정 실패" : "생성 실패")),
   });
 
   const submit = () => {
@@ -109,7 +135,7 @@ export function NewTripModal({ visible, onClose }: { visible: boolean; onClose: 
       <View style={styles.bg}>
         <View style={styles.card}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>새 여행</Text>
+            <Text style={styles.title}>{isEdit ? "여행 정보 수정" : "새 여행"}</Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}><Text style={styles.close}>닫기</Text></TouchableOpacity>
           </View>
 
@@ -135,7 +161,7 @@ export function NewTripModal({ visible, onClose }: { visible: boolean; onClose: 
 
             <Text style={styles.label}>날짜 {start ? `· ${start}${end ? ` ~ ${end}` : " ~ (종료일 선택)"}` : ""}</Text>
             <Calendar
-              minDate={todayISO()}
+              minDate={isEdit ? undefined : todayISO()}
               markingType="period"
               markedDates={markedDates}
               onDayPress={onDayPress}
@@ -159,7 +185,7 @@ export function NewTripModal({ visible, onClose }: { visible: boolean; onClose: 
             {!!error && <Text style={styles.error}>{error}</Text>}
 
             <TouchableOpacity style={styles.createBtn} onPress={submit} disabled={createMut.isPending}>
-              {createMut.isPending ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.createText}>여행 만들기</Text>}
+              {createMut.isPending ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.createText}>{isEdit ? "저장" : "여행 만들기"}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>
