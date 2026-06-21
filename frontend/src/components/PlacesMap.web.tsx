@@ -35,7 +35,16 @@ function Routes({ routes }: { routes: MapRoute[] }) {
   return null;
 }
 
-// 역 마커 — 작은 흰 원 + 역명 라벨 (google.maps API 직접)
+// 역 마커 — 잘 보이게 큰 핀(SVG) + 큰 역명 라벨
+const STATION_PIN =
+  "data:image/svg+xml;charset=UTF-8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">' +
+      '<path d="M17 1C8.7 1 2 7.7 2 16c0 10.5 15 26 15 26s15-15.5 15-26C32 7.7 25.3 1 17 1z" fill="#0ea5e9" stroke="#ffffff" stroke-width="2.5"/>' +
+      '<circle cx="17" cy="16" r="6.5" fill="#ffffff"/>' +
+      "</svg>"
+  );
+
 function Stations({ stations }: { stations: MapStation[] }) {
   const map = useMap();
   useEffect(() => {
@@ -47,15 +56,12 @@ function Stations({ stations }: { stations: MapStation[] }) {
           position: { lat: s.lat, lng: s.lng },
           map,
           title: s.name,
-          label: { text: `🚉 ${s.name}`, fontSize: "11px", fontWeight: "700", color: "#0284c7" },
+          label: { text: `🚉 ${s.name}`, fontSize: "13px", fontWeight: "800", color: "#0c4a6e" },
           icon: {
-            path: g.maps.SymbolPath.CIRCLE,
-            scale: 5,
-            fillColor: "#ffffff",
-            fillOpacity: 1,
-            strokeColor: "#0284c7",
-            strokeWeight: 2,
-            labelOrigin: new g.maps.Point(0, 3.4), // 라벨을 점 아래로
+            url: STATION_PIN,
+            scaledSize: new g.maps.Size(34, 44),
+            anchor: new g.maps.Point(17, 44),
+            labelOrigin: new g.maps.Point(17, 55),
           },
           zIndex: 999,
         })

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
 import { mapsApi, type Place, type TransitOption } from "../../services/api";
@@ -49,6 +49,13 @@ export function TransitModal({
 
   const options = data?.options ?? [];
 
+  // 구글맵 대중교통 길찾기 열기 (출발/도착 좌표 + transit 모드)
+  const openGoogleMaps = () => {
+    if (!from || !to) return;
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&travelmode=transit`;
+    Linking.openURL(url).catch(() => {});
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.bg}>
@@ -74,6 +81,10 @@ export function TransitModal({
               <Text style={styles.warnText}>⚠️ 출발 장소에 계획 시간이 없어 오전 9시 기준이에요. ◀▶로 맞춰보세요.</Text>
             </View>
           )}
+
+          <TouchableOpacity style={styles.gmapsBtn} onPress={openGoogleMaps}>
+            <Text style={styles.gmapsText}>🗺️ 구글맵에서 길찾기 (실시간 안내)</Text>
+          </TouchableOpacity>
 
           {isFetching ? (
             <ActivityIndicator color={Colors.accent} style={{ marginVertical: 30 }} />
@@ -131,6 +142,8 @@ const styles = StyleSheet.create({
   arrow: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: Colors.bgCard },
   arrowText: { fontSize: 14, fontWeight: "700", color: Colors.accentDeep },
   timeLabel: { fontSize: 15, fontWeight: "800", color: Colors.text },
+  gmapsBtn: { backgroundColor: "#e8f0fe", borderRadius: 10, paddingVertical: 11, alignItems: "center", marginBottom: 12, borderWidth: 1, borderColor: "#c6dafc" },
+  gmapsText: { color: "#1a73e8", fontSize: 14, fontWeight: "700" },
   warnBox: { backgroundColor: Colors.warnBg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12 },
   warnText: { fontSize: 12.5, color: Colors.warn, fontWeight: "600", lineHeight: 18 },
   empty: { textAlign: "center", color: Colors.textMuted, marginVertical: 30, paddingHorizontal: 20, lineHeight: 20 },
