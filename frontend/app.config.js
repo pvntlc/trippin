@@ -11,4 +11,10 @@ module.exports = ({ config }) => ({
       },
     },
   },
+  // 운영 서버가 HTTP(http://168.107.32.252:8002)라 안드로이드 cleartext 허용 필요.
+  // (안드로이드 9+ 는 기본적으로 평문 HTTP 통신을 차단)
+  plugins: [
+    ...(config.plugins || []),
+    ["expo-build-properties", { android: { usesCleartextTraffic: true } }],
+  ],
 });
