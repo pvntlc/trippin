@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { placeTypeLabel } from "../../utils/placeTypes";
+import { TimePicker } from "../../components/TimePicker";
 
 // 추천 카테고리: 표시 라벨 / 구글 검색 접두어(영문이 유명도순 결과가 좋음) / 일정 분류
 const REC_CATS = [
@@ -14,10 +15,31 @@ const REC_CATS = [
   { label: "쇼핑", term: "shopping areas in", category: "쇼핑" },
 ] as const;
 
-// 행정구역(시·도 등) 결과 제거 — 실제 장소(establishment)만 남김
+// 너무 넓은 행정구역(국가·시도·우편번호 등)만 제거하고, 나머지(도시·역·자연·상점 등)는
+// 모두 표시한다. 예전엔 establishment 만 통과시켜서 구글맵엔 있는 장소가 앱에선 누락됐음.
+const _REGION_TYPES = new Set([
+  "country",
+  "administrative_area_level_1",
+  "administrative_area_level_2",
+  "administrative_area_level_3",
+  "postal_code",
+  "colloquial_area",
+]);
 function isRealPlace(r: PlaceSearchResult): boolean {
   if (!r.types || r.types.length === 0) return true;
-  return r.types.some((t) => t === "establishment" || t === "point_of_interest");
+  return !r.types.some((t) => _REGION_TYPES.has(t));
+}
+
+// 두 좌표 직선거리(km) — 거리순 정렬용
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const la1 = toRad(a.lat), la2 = toRad(b.lat);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function kmText(km: number): string {
+  return km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`;
 }
 
 export function PlaceSearchModal({
@@ -42,6 +64,11 @@ export function PlaceSearchModal({
   const [recCat, setRecCat] = useState(0);
   // 펼쳐진(선택된) 장소
   const [open, setOpen] = useState<{ place: PlaceSearchResult; category: string } | null>(null);
+  const [time, setTime] = useState(""); // 추가 시 바로 넣는 시간(선택)
+  // 거리순 정렬 기준
+  const [sortMode, setSortMode] = useState<"none" | "current" | "last" | "pick">("none");
+  const [pickId, setPickId] = useState<number | null>(null);
+  const [curLoc, setCurLoc] = useState<{ lat: number; lng: number } | null>(null);
 
   const isSearchMode = q.trim() !== "";
   const cat = REC_CATS[recCat];
@@ -78,6 +105,7 @@ export function PlaceSearchModal({
         lng: place.lng,
         category,
         day_index: dayIndex,
+        planned_time: time.trim(),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["places", tripId] });
@@ -86,17 +114,57 @@ export function PlaceSearchModal({
     },
   });
 
-  const reset = () => { setQ(""); setSearchResults([]); setSearched(false); setOpen(null); };
+  const reset = () => { setQ(""); setSearchResults([]); setSearched(false); setOpen(null); setTime(""); };
 
-  const toggle = (item: PlaceSearchResult, category: string) =>
+  const toggle = (item: PlaceSearchResult, category: string) => {
+    setTime(""); // 다른 장소 펼칠 때 시간 초기화
     setOpen((prev) => (prev?.place.google_place_id === item.google_place_id ? null : { place: item, category }));
+  };
 
   const dayOptions: { label: string; value: number | null }[] = [
     ...Array.from({ length: dayCount }, (_, i) => ({ label: `Day ${i + 1}`, value: i as number | null })),
     { label: "가고 싶은 곳", value: null },
   ];
 
-  const list = (isSearchMode ? searchResults : recData?.results ?? []).filter(isRealPlace);
+  // 거리순 정렬에 쓸 트립의 기존 장소들(좌표 있는 것)
+  const { data: tripPlaces } = useQuery({
+    queryKey: ["places", tripId],
+    queryFn: () => placeApi.list(tripId),
+    enabled: visible,
+  });
+  const coordPlaces = (tripPlaces ?? []).filter((p) => p.lat != null && p.lng != null);
+  const lastPlace = coordPlaces.length
+    ? [...coordPlaces].sort((a, b) =>
+        (a.day_index ?? 99) - (b.day_index ?? 99) ||
+        (a.planned_time || "99").localeCompare(b.planned_time || "99") ||
+        a.order_index - b.order_index
+      ).at(-1)
+    : undefined;
+
+  const useCurrentLocation = () => {
+    setSortMode("current");
+    if (!curLoc && typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (p) => setCurLoc({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => {}
+      );
+    }
+  };
+
+  const refCoord: { lat: number; lng: number } | null =
+    sortMode === "current" ? curLoc
+    : sortMode === "last" ? (lastPlace ? { lat: lastPlace.lat as number, lng: lastPlace.lng as number } : null)
+    : sortMode === "pick" ? (() => { const p = coordPlaces.find((x) => x.id === pickId); return p ? { lat: p.lat as number, lng: p.lng as number } : null; })()
+    : null;
+
+  let list = (isSearchMode ? searchResults : recData?.results ?? []).filter(isRealPlace);
+  if (refCoord) {
+    list = [...list].sort((a, b) => {
+      const da = a.lat != null && a.lng != null ? haversineKm(refCoord, { lat: a.lat, lng: a.lng }) : Infinity;
+      const db = b.lat != null && b.lng != null ? haversineKm(refCoord, { lat: b.lat, lng: b.lng }) : Infinity;
+      return da - db;
+    });
+  }
   const loading = isSearchMode ? searchMut.isPending : recLoading;
 
   // 펼친 장소 갤러리: 검색 사진(즉시) + 상세 사진들(요약과 함께), 중복 제거
@@ -130,6 +198,9 @@ export function PlaceSearchModal({
             <Text style={styles.summaryLoading}>요약할 리뷰가 없어요.</Text>
           )}
         </View>
+
+        <Text style={styles.timeLabel}>시간 (선택 — 추가 시 바로 적용)</Text>
+        <TimePicker value={time} onChange={setTime} />
 
         {defaultDay !== undefined && (
           <TouchableOpacity
@@ -199,6 +270,43 @@ export function PlaceSearchModal({
             </View>
           )}
 
+          {list.length > 0 && (
+            <View>
+              <View style={styles.sortRow}>
+                <Text style={styles.sortLabel}>거리순</Text>
+                {([
+                  { k: "none", label: "기본" },
+                  { k: "current", label: "📍현재위치" },
+                  { k: "last", label: "🏁마지막" },
+                  { k: "pick", label: "📌지정" },
+                ] as const).map((s) => (
+                  <TouchableOpacity
+                    key={s.k}
+                    style={[styles.sortChip, sortMode === s.k && styles.sortChipOn]}
+                    onPress={() => (s.k === "current" ? useCurrentLocation() : setSortMode(s.k))}
+                  >
+                    <Text style={[styles.sortChipText, sortMode === s.k && styles.sortChipTextOn]}>{s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {sortMode === "pick" && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
+                  {coordPlaces.length === 0 ? (
+                    <Text style={styles.sortHint}>좌표 있는 장소가 없어요.</Text>
+                  ) : (
+                    coordPlaces.map((p) => (
+                      <TouchableOpacity key={p.id} style={[styles.pickChip, pickId === p.id && styles.pickChipOn]} onPress={() => setPickId(p.id)}>
+                        <Text style={[styles.pickChipText, pickId === p.id && styles.pickChipTextOn]}>{p.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+              )}
+              {sortMode === "current" && !curLoc && <Text style={styles.sortHint}>위치 권한을 허용하면 가까운 순으로 정렬돼요.</Text>}
+              {sortMode === "last" && !lastPlace && <Text style={styles.sortHint}>일정에 좌표 있는 장소가 있어야 해요.</Text>}
+            </View>
+          )}
+
           {loading ? (
             <ActivityIndicator color={Colors.accent} style={{ marginVertical: 24 }} />
           ) : (
@@ -230,6 +338,9 @@ export function PlaceSearchModal({
                           {placeTypeLabel(item.types)} · {item.address}
                         </Text>
                       </View>
+                      {refCoord && item.lat != null && item.lng != null && (
+                        <Text style={styles.distBadge}>{kmText(haversineKm(refCoord, { lat: item.lat, lng: item.lng }))}</Text>
+                      )}
                       {item.rating != null && <Text style={styles.rating}>★ {item.rating}</Text>}
                     </TouchableOpacity>
                     {isOpen && renderDetail(item, itemCat)}
@@ -270,6 +381,18 @@ const styles = StyleSheet.create({
   resultName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   resultAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   rating: { fontSize: 13, color: Colors.accentDeep, fontWeight: "600" },
+  distBadge: { fontSize: 12, color: Colors.white, backgroundColor: Colors.accent, fontWeight: "700", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, overflow: "hidden", marginRight: 6 },
+  sortRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  sortLabel: { fontSize: 12.5, color: Colors.textMuted, fontWeight: "600", marginRight: 2 },
+  sortChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: Colors.bgCardAlt },
+  sortChipOn: { backgroundColor: Colors.accentDeep },
+  sortChipText: { fontSize: 12.5, color: Colors.textSub, fontWeight: "600" },
+  sortChipTextOn: { color: Colors.white },
+  pickChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 14, backgroundColor: Colors.bgCardAlt, borderWidth: 1, borderColor: Colors.border },
+  pickChipOn: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  pickChipText: { fontSize: 12.5, color: Colors.textSub, fontWeight: "600" },
+  pickChipTextOn: { color: Colors.white },
+  sortHint: { fontSize: 12, color: Colors.textMuted, marginBottom: 8 },
   // 펼침 상세
   detail: { paddingHorizontal: 8, paddingBottom: 14 },
   galleryImg: { width: 220, height: 150, borderRadius: 12, backgroundColor: Colors.bgCard },
@@ -281,6 +404,7 @@ const styles = StyleSheet.create({
   primaryDay: { backgroundColor: Colors.accentDeep, borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 14 },
   primaryDayText: { color: Colors.white, fontWeight: "700", fontSize: 15 },
   dayPrompt: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 14, marginBottom: 8 },
+  timeLabel: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 14, marginBottom: 6 },
   dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   dayBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   dayBtnText: { color: Colors.white, fontWeight: "700", fontSize: 14 },
