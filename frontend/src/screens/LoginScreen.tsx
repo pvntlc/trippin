@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../store/auth";
@@ -50,7 +50,8 @@ export function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <Text style={styles.logo}>✈️ Trippin</Text>
+      <Image source={require("../../assets/icon.png")} style={styles.logoImg} />
+      <Text style={styles.logo}>Trippin</Text>
       <Text style={styles.subtitle}>해외여행 일정을 한 곳에서</Text>
 
       {mode === "register" && (
@@ -106,7 +107,8 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: Colors.bg },
-  logo: { fontSize: 36, fontWeight: "800", color: Colors.accentDeep, textAlign: "center" },
+  logoImg: { width: 84, height: 84, borderRadius: 20, alignSelf: "center", marginBottom: 14 },
+  logo: { fontSize: 34, fontWeight: "800", color: Colors.accentDeep, textAlign: "center" },
   subtitle: { fontSize: 15, color: Colors.textSub, textAlign: "center", marginTop: 6, marginBottom: 32 },
   input: {
     backgroundColor: Colors.bgCard,
