@@ -87,14 +87,26 @@ export function PlaceSearchModal({
   }, [q]);
   useEffect(() => { setOpen(null); }, [debouncedQ]);
 
-  // 구글맵식 자동완성 예측(부분어/오타에 강함). 목적지로 지역 바이어스.
-  const { data: acData, isFetching: searchLoading } = useQuery({
-    queryKey: ["autocomplete", debouncedQ, destination],
-    queryFn: () => mapsApi.autocomplete(debouncedQ, destination || undefined),
+  // 1차: TextSearch + 위치바이어스 — 카테고리어("공원")·해외도 현지 결과가 잘 나옴
+  const { data: textData, isFetching: textLoading } = useQuery({
+    queryKey: ["search", debouncedQ, destination],
+    queryFn: () => mapsApi.search(debouncedQ, destination || undefined),
     enabled: visible && debouncedQ.length >= 1,
     staleTime: 60_000,
   });
+  const textResults = (textData?.results ?? []).filter(isRealPlace);
+
+  // 2차(폴백): 1차가 0건이면 자동완성 — 부분어/오타("스타")에 강함
+  const needAC = visible && !!debouncedQ && !textLoading && textResults.length === 0;
+  const { data: acData, isFetching: acLoading } = useQuery({
+    queryKey: ["autocomplete", debouncedQ, destination],
+    queryFn: () => mapsApi.autocomplete(debouncedQ, destination || undefined),
+    enabled: needAC,
+    staleTime: 60_000,
+  });
   const predictions = acData?.predictions ?? [];
+  const showPredictions = textResults.length === 0 && predictions.length > 0;
+  const searchLoading = textLoading || (needAC && acLoading);
 
   // 예측을 탭하면 상세(좌표·사진·평점)를 받아 펼침
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -191,7 +203,9 @@ export function PlaceSearchModal({
       return da - db;
     });
   }
-  const list: (PlaceSearchResult | Prediction)[] = isSearchMode ? predictions : recList;
+  const list: (PlaceSearchResult | Prediction)[] = isSearchMode
+    ? (showPredictions ? predictions : textResults)
+    : recList;
   const loading = isSearchMode ? searchLoading : recLoading;
 
   // 펼친 장소 갤러리: 검색 사진(즉시) + 상세 사진들(요약과 함께), 중복 제거
@@ -341,7 +355,7 @@ export function PlaceSearchModal({
           ) : (
             <FlatList
               data={list}
-              keyExtractor={(r) => (isSearchMode ? (r as Prediction).place_id : (r as PlaceSearchResult).google_place_id)}
+              keyExtractor={(r) => (isSearchMode && showPredictions ? (r as Prediction).place_id : (r as PlaceSearchResult).google_place_id)}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
                 <Text style={styles.empty}>
@@ -351,8 +365,8 @@ export function PlaceSearchModal({
                 </Text>
               }
               renderItem={({ item }) => {
-                // 검색 모드: 자동완성 예측(좌표 없음) — 탭하면 상세를 받아 펼침
-                if (isSearchMode) {
+                // 자동완성 예측(좌표 없음) — 탭하면 상세를 받아 펼침
+                if (isSearchMode && showPredictions) {
                   const p = item as Prediction;
                   const isOpen = open?.place.google_place_id === p.place_id;
                   return (
@@ -369,9 +383,9 @@ export function PlaceSearchModal({
                     </View>
                   );
                 }
-                // 추천 모드: 검색결과 객체(사진·평점·좌표 포함)
+                // 추천 결과 또는 TextSearch 검색결과(사진·평점·좌표 포함)
                 const r2 = item as PlaceSearchResult;
-                const itemCat = cat.category;
+                const itemCat = isSearchMode ? "" : cat.category;
                 const isOpen = open?.place.google_place_id === r2.google_place_id;
                 return (
                   <View style={[styles.itemWrap, isOpen && styles.itemWrapOpen]}>
