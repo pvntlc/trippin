@@ -154,6 +154,8 @@ export const tripApi = {
   get: (id: number) => request<Trip>(`/trips/${id}`),
   create: (data: Partial<Trip>) =>
     request<Trip>("/trips", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Trip>) =>
+    request<Trip>(`/trips/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (id: number) => request<void>(`/trips/${id}`, { method: "DELETE" }),
 };
 

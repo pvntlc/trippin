@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
@@ -48,7 +49,7 @@ export function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <Text style={styles.logo}>✈️ Trippin</Text>
       <Text style={styles.subtitle}>해외여행 일정을 한 곳에서</Text>
 
@@ -99,7 +100,7 @@ export function LoginScreen() {
           {mode === "login" ? "계정이 없으신가요? 회원가입" : "이미 계정이 있으신가요? 로그인"}
         </Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 

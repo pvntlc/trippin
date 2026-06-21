@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -31,7 +32,7 @@ export function TripsScreen({ navigation }: Props) {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>내 여행</Text>
         <TouchableOpacity onPress={logout}>
@@ -56,7 +57,7 @@ export function TripsScreen({ navigation }: Props) {
       </TouchableOpacity>
 
       <NewTripModal visible={showNew} onClose={() => setShowNew(false)} />
-    </View>
+    </SafeAreaView>
   );
 }
 
