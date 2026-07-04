@@ -33,6 +33,22 @@ async def search(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
 
 
+@router.get("/nearby")
+async def nearby(
+    lat: float = Query(...),
+    lng: float = Query(...),
+    type: str = Query("", description="restaurant/cafe/tourist_attraction/shopping_mall 등"),
+    keyword: str = Query(""),
+    language: str = "ko",
+    _: User = Depends(get_current_user),
+):
+    """좌표 주변을 거리순으로 검색 — '이 위치 주변 맛집' 같은 실제 근접 결과."""
+    try:
+        return {"results": await gmaps.nearby_places(lat, lng, type, keyword, language)}
+    except gmaps.GoogleMapsError as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+
+
 @router.get("/autocomplete")
 async def autocomplete(
     q: str = Query(min_length=1, description="입력어(부분어 OK)"),

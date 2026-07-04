@@ -318,6 +318,11 @@ export const mapsApi = {
     request<{ predictions: Prediction[] }>(
       `/maps/autocomplete?q=${encodeURIComponent(q)}` + (near ? `&near=${encodeURIComponent(near)}` : "")
     ),
+  // 좌표 주변 거리순 검색 (실제 가까운 곳부터)
+  nearby: (lat: number, lng: number, type: string) =>
+    request<{ results: PlaceSearchResult[] }>(
+      `/maps/nearby?lat=${lat}&lng=${lng}&type=${encodeURIComponent(type)}`
+    ),
   placeDetails: (placeId: string) =>
     request<PlaceSearchResult & { website?: string; phone?: string }>(`/maps/details/${encodeURIComponent(placeId)}`),
   placeSummary: (placeId: string) =>

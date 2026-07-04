@@ -9,10 +9,10 @@ import { TimePicker } from "../../components/TimePicker";
 
 // 추천 카테고리: 표시 라벨 / 구글 검색 접두어(영문이 유명도순 결과가 좋음) / 일정 분류
 const REC_CATS = [
-  { label: "명소", term: "top tourist attractions in", category: "관광" },
-  { label: "맛집", term: "best restaurants in", category: "식비" },
-  { label: "카페", term: "popular cafes in", category: "카페" },
-  { label: "쇼핑", term: "shopping areas in", category: "쇼핑" },
+  { label: "명소", term: "top tourist attractions in", type: "tourist_attraction", category: "관광" },
+  { label: "맛집", term: "best restaurants in", type: "restaurant", category: "식비" },
+  { label: "카페", term: "popular cafes in", type: "cafe", category: "카페" },
+  { label: "쇼핑", term: "shopping areas in", type: "shopping_mall", category: "쇼핑" },
 ] as const;
 
 // 너무 넓은 행정구역(국가·시도·우편번호 등)만 제거하고, 나머지(도시·역·자연·상점 등)는
@@ -84,13 +84,6 @@ export function PlaceSearchModal({
   const isSearchMode = q.trim() !== "";
   const cat = REC_CATS[recCat];
 
-  const { data: recData, isFetching: recLoading } = useQuery({
-    queryKey: ["recommend", city, cat.term],
-    // 선택한 도시 좌표로 결과를 바이어스(언어/국가 무관, 해외도 정상 동작)
-    queryFn: () => mapsApi.search(cat.term, city),
-    enabled: visible && !isSearchMode && !!city,
-    staleTime: 5 * 60_000,
-  });
 
   // 타이핑이 멈추면(350ms) 자동으로 검색 — 버튼 없이 실시간 갱신
   useEffect(() => {
@@ -248,6 +241,21 @@ export function PlaceSearchModal({
     Linking.openURL(url).catch(() => {});
   };
 
+  // 추천 검색: 기준 위치(현재/마지막/지정)를 고르면 그 좌표 '주변 거리순'으로,
+  // 아니면 선택 도시 기준으로. → 캠핑장처럼 외진 곳도 실제 가까운 곳부터 나옴.
+  const useNearby = !isSearchMode && !!refCoord;
+  const { data: recData, isFetching: recLoading } = useQuery({
+    queryKey: useNearby
+      ? ["nearby", refCoord!.lat, refCoord!.lng, cat.type]
+      : ["recommend", city, cat.term],
+    queryFn: () =>
+      useNearby
+        ? mapsApi.nearby(refCoord!.lat, refCoord!.lng, cat.type)
+        : mapsApi.search(cat.term, city),
+    enabled: visible && !isSearchMode && (useNearby || !!city),
+    staleTime: 5 * 60_000,
+  });
+
   // 좌표 기준 거리순 정렬 헬퍼
   const sortByRef = (arr: PlaceSearchResult[]): PlaceSearchResult[] => {
     if (!refCoord) return arr;
@@ -364,7 +372,7 @@ export function PlaceSearchModal({
 
           {/* 여행 도시 여러 개면 칩으로 선택 → 그 도시 기준으로 추천/검색 */}
           {cityList.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cityChips}>
+            <View style={styles.cityChips}>
               {cityList.map((c) => (
                 <TouchableOpacity
                   key={c}
@@ -374,7 +382,7 @@ export function PlaceSearchModal({
                   <Text style={[styles.cityChipText, selectedCity === c && styles.cityChipTextOn]}>{c}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           )}
 
           <View style={styles.searchRow}>
@@ -536,8 +544,8 @@ const styles = StyleSheet.create({
   searchBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 18, justifyContent: "center", minWidth: 64, alignItems: "center" },
   btnOff: { opacity: 0.4 },
   searchBtnText: { color: Colors.white, fontWeight: "700" },
-  cityChips: { gap: 8, paddingBottom: 12 },
-  cityChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: Colors.bgCardAlt, borderWidth: 1, borderColor: Colors.border },
+  cityChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  cityChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: Colors.bgCardAlt, borderWidth: 1, borderColor: Colors.border },
   cityChipOn: { backgroundColor: Colors.accentDeep, borderColor: Colors.accentDeep },
   cityChipText: { color: Colors.textSub, fontSize: 13, fontWeight: "700" },
   cityChipTextOn: { color: Colors.white },

@@ -11,6 +11,7 @@ import httpx
 from app.core.config import settings
 
 _PLACES_TEXT = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+_PLACES_NEARBY = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
 _PLACE_DETAILS = "https://maps.googleapis.com/maps/api/place/details/json"
 _AUTOCOMPLETE = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
 _DIRECTIONS = "https://maps.googleapis.com/maps/api/directions/json"
@@ -82,6 +83,38 @@ async def search_places(query: str, language: str = "ko", location: tuple[float,
             }
         )
     return results
+
+
+def _map_result(r: dict) -> dict:
+    loc = r.get("geometry", {}).get("location", {})
+    photos = r.get("photos", [])
+    return {
+        "google_place_id": r.get("place_id"),
+        "name": r.get("name"),
+        "address": r.get("formatted_address") or r.get("vicinity", ""),
+        "lat": loc.get("lat"),
+        "lng": loc.get("lng"),
+        "rating": r.get("rating"),
+        "types": r.get("types", []),
+        "photo_reference": photos[0].get("photo_reference") if photos else None,
+    }
+
+
+async def nearby_places(lat: float, lng: float, place_type: str = "", keyword: str = "", language: str = "ko") -> list[dict]:
+    """좌표 주변을 '거리순(rankby=distance)'으로 검색 — 실제 가까운 곳부터. type/keyword 중 하나 필요."""
+    key = _require_key()
+    params: dict = {"location": f"{lat},{lng}", "rankby": "distance", "language": language, "key": key}
+    if place_type:
+        params["type"] = place_type
+    if keyword:
+        params["keyword"] = keyword
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.get(_PLACES_NEARBY, params=params)
+    data = resp.json()
+    status = data.get("status")
+    if status not in ("OK", "ZERO_RESULTS"):
+        raise GoogleMapsError(f"주변 검색 실패: {status} {data.get('error_message', '')}")
+    return [_map_result(r) for r in data.get("results", [])]
 
 
 async def autocomplete(query: str, language: str = "ko", location: tuple[float, float] | None = None) -> list[dict]:
