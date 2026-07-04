@@ -20,17 +20,21 @@ jobs:
           CORS_ORIGINS:         ${{ secrets.CORS_ORIGINS }}
           ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
           NAVITIME_API_KEY:     ${{ secrets.NAVITIME_API_KEY }}
+          KAKAO_REST_API_KEY:   ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET:  ${{ secrets.KAKAO_CLIENT_SECRET }}
         run: |
           {
             echo "APP_ENV=production"
             echo "APP_HOST=0.0.0.0"
             echo "APP_PORT=8002"
             echo "JWT_SECRET=${JWT_SECRET}"
-            echo "JWT_EXPIRE_MINUTES=43200"
+            echo "JWT_EXPIRE_MINUTES=10080"
             echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
             echo "CORS_ORIGINS=${CORS_ORIGINS:-*}"
             echo "APP_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
             echo "NAVITIME_API_KEY=${NAVITIME_API_KEY}"
+            echo "KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}"
+            echo "KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}"
           } > backend/.env
 
       # ── 2) 프론트엔드 Expo web 빌드 ─────────────────────────
@@ -43,10 +47,12 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL:         ${{ secrets.PUBLIC_API_URL }}
           EXPO_PUBLIC_GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          EXPO_PUBLIC_KAKAO_KEY:       ${{ secrets.KAKAO_REST_API_KEY }}
         run: |
           cd frontend
           echo "EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}" > .env
           echo "EXPO_PUBLIC_GOOGLE_MAPS_KEY=${EXPO_PUBLIC_GOOGLE_MAPS_KEY}" >> .env
+          echo "EXPO_PUBLIC_KAKAO_KEY=${EXPO_PUBLIC_KAKAO_KEY}" >> .env
           npm ci
           npx expo export --platform web
       - name: Package frontend dist

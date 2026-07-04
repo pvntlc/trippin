@@ -27,6 +27,8 @@ async def init_db():
             "ALTER TABLE place_review_cache ADD COLUMN photo_refs TEXT DEFAULT ''",
             "ALTER TABLE trip_members ADD COLUMN status VARCHAR(16) DEFAULT 'accepted'",
             "ALTER TABLE expenses ADD COLUMN split_user_ids TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN provider VARCHAR(16) DEFAULT 'local'",
+            "ALTER TABLE users ADD COLUMN provider_id VARCHAR(64) DEFAULT ''",
         ]:
             try:
                 await conn.execute(text(sql))

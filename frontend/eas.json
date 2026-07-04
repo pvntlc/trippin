@@ -13,7 +13,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://trippin.168-107-45-67.sslip.io"
+        "EXPO_PUBLIC_API_URL": "https://trippin.168-107-45-67.sslip.io",
+        "EXPO_PUBLIC_KAKAO_KEY": "REPLACE_WITH_KAKAO_REST_API_KEY"
       }
     },
     "production": {
@@ -21,7 +22,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://trippin.168-107-45-67.sslip.io"
+        "EXPO_PUBLIC_API_URL": "https://trippin.168-107-45-67.sslip.io",
+        "EXPO_PUBLIC_KAKAO_KEY": "REPLACE_WITH_KAKAO_REST_API_KEY"
       }
     }
   },

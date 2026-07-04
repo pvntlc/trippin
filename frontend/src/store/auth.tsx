@@ -17,7 +17,7 @@ type AuthState = {
   loading: boolean;
   sessionMessage: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  loginWithKakao: (code: string, redirectUri: string) => Promise<void>;
   logout: () => Promise<void>;
   markActivity: () => void;
 };
@@ -147,15 +147,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persist(access_token);
   }, [persist]);
 
-  const register = useCallback(async (email: string, password: string, name: string) => {
-    const { access_token } = await authApi.register(email, password, name);
+  const loginWithKakao = useCallback(async (code: string, redirectUri: string) => {
+    const { access_token } = await authApi.kakao(code, redirectUri);
     await persist(access_token);
   }, [persist]);
 
   const logout = useCallback(async () => { await doLogout("manual"); }, [doLogout]);
 
   return (
-    <AuthContext.Provider value={{ token, loading, sessionMessage, login, register, logout, markActivity }}>
+    <AuthContext.Provider value={{ token, loading, sessionMessage, login, loginWithKakao, logout, markActivity }}>
       {children}
     </AuthContext.Provider>
   );
