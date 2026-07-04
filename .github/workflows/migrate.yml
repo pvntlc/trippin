@@ -2,11 +2,15 @@ name: Migration helper
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "transfer-db | stop-old"
+        required: true
+        default: "stop-old"
 
-# 구서버(OCI_HOST) → 러너 → 신서버(OCI_NEW_HOST) 로 trippin.db 를 직접 옮긴다.
-# 다운로드 가능한 아티팩트를 만들지 않음 — 사용자 소유 두 호스트 간 내부 이전.
 jobs:
   transfer:
+    if: ${{ inputs.mode == 'transfer-db' }}
     runs-on: ubuntu-latest
     steps:
       - name: Write SSH keys
@@ -17,18 +21,29 @@ jobs:
           chmod 600 ~/.ssh/old_key ~/.ssh/new_key
           ssh-keyscan -p 2222 ${{ secrets.OCI_HOST }}     >> ~/.ssh/known_hosts 2>/dev/null
           ssh-keyscan -p 2222 ${{ secrets.OCI_NEW_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-
       - name: Pull db from old server
         run: |
           scp -P 2222 -i ~/.ssh/old_key \
             ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }}:trippin/backend/trippin.db ./trippin.db
           ls -la trippin.db
-
       - name: Push db to new server
         run: |
-          ssh -p 2222 -i ~/.ssh/new_key ${{ secrets.OCI_USER }}@${{ secrets.OCI_NEW_HOST }} \
-            'mkdir -p ~/migration-incoming'
+          ssh -p 2222 -i ~/.ssh/new_key ${{ secrets.OCI_USER }}@${{ secrets.OCI_NEW_HOST }} 'mkdir -p ~/migration-incoming'
           scp -P 2222 -i ~/.ssh/new_key ./trippin.db \
             ${{ secrets.OCI_USER }}@${{ secrets.OCI_NEW_HOST }}:migration-incoming/trippin.db
-          ssh -p 2222 -i ~/.ssh/new_key ${{ secrets.OCI_USER }}@${{ secrets.OCI_NEW_HOST }} \
-            'ls -la ~/migration-incoming/trippin.db'
+
+  stop-old:
+    if: ${{ inputs.mode == 'stop-old' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stop trippin on old server (single source of truth on new)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 2222
+          script: |
+            sudo systemctl stop trippin
+            sudo systemctl disable trippin
+            echo "old trippin stopped:"; systemctl is-active trippin || true
