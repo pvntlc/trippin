@@ -5,6 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { checklistApi, type ChecklistItem } from "../../services/api";
 import { Colors } from "../../constants/colors";
 
+// 해외여행 공통 준비물 추천 (캠핑 장비 제외)
+const TRAVEL_ESSENTIALS = [
+  "여권", "항공권·e티켓", "숙소 예약 확인", "여행자보험", "유심·eSIM",
+  "해외용 어댑터", "보조배터리·충전기", "신용카드·현금(엔화)", "상비약",
+  "세면도구", "여벌 옷", "우산·우비", "선크림",
+];
+
 export function ChecklistTab({ tripId, canEdit }: { tripId: number; canEdit: boolean }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
@@ -28,6 +35,16 @@ export function ChecklistTab({ tripId, canEdit }: { tripId: number; canEdit: boo
     mutationFn: (id: number) => checklistApi.remove(tripId, id),
     onSuccess: invalidate,
   });
+  const suggestMut = useMutation({
+    mutationFn: async () => {
+      const have = new Set((items ?? []).map((i) => i.text));
+      for (const t of TRAVEL_ESSENTIALS) {
+        if (!have.has(t)) await checklistApi.add(tripId, t);
+      }
+    },
+    onSuccess: invalidate,
+  });
+  const missingCount = TRAVEL_ESSENTIALS.filter((t) => !(items ?? []).some((i) => i.text === t)).length;
 
   const doneCount = (items ?? []).filter((i) => i.is_done).length;
   const total = items?.length ?? 0;
@@ -40,6 +57,14 @@ export function ChecklistTab({ tripId, canEdit }: { tripId: number; canEdit: boo
     <View style={styles.container}>
       {total > 0 && (
         <Text style={styles.progress}>{doneCount} / {total} 완료</Text>
+      )}
+
+      {canEdit && missingCount > 0 && (
+        <TouchableOpacity style={styles.suggest} onPress={() => suggestMut.mutate()} disabled={suggestMut.isPending}>
+          {suggestMut.isPending
+            ? <ActivityIndicator color={Colors.accentDeep} />
+            : <Text style={styles.suggestText}>🧳 여행 준비물 {missingCount}개 한 번에 추가</Text>}
+        </TouchableOpacity>
       )}
 
       <FlatList
@@ -96,6 +121,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   progress: { fontSize: 13, color: Colors.textSub, marginBottom: 12, fontWeight: "600" },
+  suggest: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.accent, borderStyle: "dashed", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 12 },
+  suggestText: { color: Colors.accentDeep, fontSize: 14, fontWeight: "700" },
   empty: { textAlign: "center", color: Colors.textMuted, marginTop: 40 },
   row: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.bgCard, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   check: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },

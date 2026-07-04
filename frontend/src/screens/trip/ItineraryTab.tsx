@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Modal } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { placeApi, tripApi, type Place, type Trip, type TransitOption } from "../../services/api";
+import { placeApi, tripApi, expenseApi, fxApi, type Place, type Trip, type TransitOption } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
@@ -99,11 +99,32 @@ export function ItineraryTab({
   const wdays = weather?.days ?? [];
   const wHistorical = wdays.some((w) => w.historical);
 
+  // 일차별 예상 경비 소계 (원화 환산)
+  const { data: dayExpenses } = useQuery({ queryKey: ["expenses", tripId], queryFn: () => expenseApi.list(tripId) });
+  const { data: fx } = useQuery({ queryKey: ["fx-krw"], queryFn: fxApi.krw, staleTime: 6 * 3600_000 });
+  const dayKRW = useMemo(() => {
+    const krwPer = fx?.krw_per ?? {};
+    const m: Record<number, number> = {};
+    (dayExpenses ?? []).forEach((e) => {
+      if (e.day_index == null) return;
+      const k = krwPer[e.currency] ? e.amount * krwPer[e.currency] : (e.currency === "KRW" ? e.amount : 0);
+      m[e.day_index] = (m[e.day_index] || 0) + k;
+    });
+    return m;
+  }, [dayExpenses, fx]);
+
   // 행에서 바로 삭제 (실수 방지 2단계: ✕ → 삭제?)
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const removeMut = useMutation({
     mutationFn: (id: number) => placeApi.remove(tripId, id),
     onSuccess: () => { setConfirmDel(null); qc.invalidateQueries({ queryKey: ["places", tripId] }); },
+  });
+
+  // 장소를 다른 날로 이동 (행 길게 눌러 열림)
+  const [moving, setMoving] = useState<Place | null>(null);
+  const moveMut = useMutation({
+    mutationFn: ({ id, day }: { id: number; day: number | null }) => placeApi.update(tripId, id, { day_index: day }),
+    onSuccess: () => { setMoving(null); qc.invalidateQueries({ queryKey: ["places", tripId] }); },
   });
 
   const optimizeMut = useMutation({
@@ -192,6 +213,9 @@ export function ItineraryTab({
             <View style={styles.dayHeaderRow}>
               <Text style={styles.dayHeader}>{section.title}</Text>
               {!!section.date && <Text style={styles.dayDate}>{section.date}</Text>}
+              {section.dayIndex !== null && dayKRW[section.dayIndex] > 0 && (
+                <Text style={styles.daySpend}>💴 ₩{Math.round(dayKRW[section.dayIndex]).toLocaleString()}</Text>
+              )}
               <View style={{ flex: 1 }} />
               {canEdit && section.dayIndex !== null && section.data.length >= 2 && (
                 <TouchableOpacity style={styles.reorderBtn} onPress={() => setReorderDay({ label: section.title, places: section.data })}>
@@ -237,6 +261,7 @@ export function ItineraryTab({
             <TouchableOpacity
               style={styles.placeCard}
               onPress={() => canEdit && setEditing(item)}
+              onLongPress={() => canEdit && setMoving(item)}
               disabled={!canEdit}
               activeOpacity={canEdit ? 0.6 : 1}
             >
@@ -282,6 +307,26 @@ export function ItineraryTab({
       />
       <PlaceEditModal tripId={tripId} place={editing} dayCount={dayCount} onClose={() => setEditing(null)} />
 
+      {/* 다른 날로 이동 (행 길게 누르면) */}
+      <Modal visible={moving != null} transparent animationType="fade" onRequestClose={() => setMoving(null)}>
+        <TouchableOpacity style={styles.moveBg} activeOpacity={1} onPress={() => setMoving(null)}>
+          <View style={styles.moveCard}>
+            <Text style={styles.moveTitle} numberOfLines={1}>{moving?.name}</Text>
+            <Text style={styles.moveSub}>어느 날로 옮길까요?</Text>
+            <View style={styles.moveGrid}>
+              {Array.from({ length: dayCount }, (_, i) => i).map((i) => (
+                <TouchableOpacity key={i} style={[styles.moveChip, moving?.day_index === i && styles.moveChipOn]} onPress={() => moveMut.mutate({ id: moving!.id, day: i })}>
+                  <Text style={[styles.moveChipText, moving?.day_index === i && styles.moveChipTextOn]}>Day {i + 1}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={[styles.moveChip, moving?.day_index == null && styles.moveChipOn]} onPress={() => moveMut.mutate({ id: moving!.id, day: null })}>
+                <Text style={[styles.moveChipText, moving?.day_index == null && styles.moveChipTextOn]}>가고 싶은 곳</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <TransitModal
         from={transitModal?.from ?? null}
         to={transitModal?.to ?? null}
@@ -316,6 +361,16 @@ const styles = StyleSheet.create({
   modeChipTextOn: { color: Colors.white },
   dayHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, marginBottom: 8 },
   dayHeader: { fontSize: 16, fontWeight: "700", color: Colors.accentDeep },
+  daySpend: { fontSize: 12, fontWeight: "800", color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  moveBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24 },
+  moveCard: { backgroundColor: Colors.bgCard, borderRadius: 16, padding: 18, width: "100%", maxWidth: 360 },
+  moveTitle: { fontSize: 16, fontWeight: "800", color: Colors.text },
+  moveSub: { fontSize: 13, color: Colors.textSub, marginTop: 4, marginBottom: 12 },
+  moveGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  moveChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.bgCardAlt },
+  moveChipOn: { backgroundColor: Colors.accent },
+  moveChipText: { fontSize: 14, fontWeight: "700", color: Colors.textSub },
+  moveChipTextOn: { color: Colors.white },
   dayDate: { fontSize: 13, color: Colors.textSub, fontWeight: "500" },
   addDayBtn: { backgroundColor: Colors.bgCardAlt, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   addDayText: { fontSize: 13, fontWeight: "700", color: Colors.accentDeep },

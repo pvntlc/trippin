@@ -9,6 +9,13 @@ import { Colors } from "../../constants/colors";
 const CATEGORIES = ["식비", "교통", "숙박", "관광", "쇼핑", "기타"];
 const FX_CURRENCIES = ["KRW", "JPY", "USD", "EUR"];
 
+function tripDayCount(s?: string, e?: string) {
+  if (!s || !e) return 1;
+  const a = new Date(s).getTime(), b = new Date(e).getTime();
+  if (isNaN(a) || isNaN(b)) return 1;
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
+}
+
 function fmt(n: number) {
   return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
@@ -32,6 +39,8 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   const [splitIds, setSplitIds] = useState<number[]>([]);
   const [atDestination, setAtDestination] = useState(false);
   const [expCurrency, setExpCurrency] = useState(currency);   // 지출별 통화(엔·원 동시 사용)
+  const [expDay, setExpDay] = useState<number | null>(null);  // 지출을 며칠차에 (null=공통)
+  const dayCount = tripDayCount(startDate, endDate);
 
   const { data: expenses, isLoading } = useQuery({
     queryKey: ["expenses", tripId],
@@ -89,6 +98,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
     setPaidBy(me?.id ?? null);
     setSplitIds(accepted.map(m => m.user.id));   // 기본 = 전원 분담
     setExpCurrency(currency);
+    setExpDay(null);
     setShow(true);
   };
 
@@ -125,6 +135,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
     mutationFn: () =>
       expenseApi.add(tripId, {
         title: title.trim(), amount: Number(amount) || 0, currency: expCurrency, category,
+        day_index: expDay,
         paid_by: paidBy ?? undefined,
         split_user_ids: splitIds.length ? splitIds : (paidBy ? [paidBy] : []),
       }),
@@ -265,6 +276,18 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
               {CATEGORIES.map((c) => (
                 <TouchableOpacity key={c} onPress={() => setCategory(c)} style={[styles.catOpt, category === c && styles.catOptOn]}>
                   <Text style={[styles.catOptText, category === c && styles.catOptTextOn]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.sectionLabel}>며칠차 지출?</Text>
+            <View style={styles.catPick}>
+              <TouchableOpacity onPress={() => setExpDay(null)} style={[styles.catOpt, expDay === null && styles.catOptOn]}>
+                <Text style={[styles.catOptText, expDay === null && styles.catOptTextOn]}>공통</Text>
+              </TouchableOpacity>
+              {Array.from({ length: dayCount }, (_, i) => i).map((i) => (
+                <TouchableOpacity key={i} onPress={() => setExpDay(i)} style={[styles.catOpt, expDay === i && styles.catOptOn]}>
+                  <Text style={[styles.catOptText, expDay === i && styles.catOptTextOn]}>Day {i + 1}</Text>
                 </TouchableOpacity>
               ))}
             </View>
