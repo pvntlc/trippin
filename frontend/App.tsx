@@ -27,6 +27,9 @@ const queryClient = new QueryClient({
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: Platform.OS === "web" && typeof window !== "undefined" ? [window.location.origin] : [],
   config: {
+    // 새로고침(딥링크)으로 TripDetail 에 바로 들어와도 Trips 를 스택 밑에 깔아
+    // 뒤로가기 버튼이 사라지지 않게 한다.
+    initialRouteName: "Trips",
     screens: {
       Trips: "",
       TripDetail: { path: "trip/:tripId", parse: { tripId: Number } },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView, Linking } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView, Linking, Platform } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import * as Location from "expo-location";
 
 import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult, type Prediction } from "../../services/api";
 import { Colors } from "../../constants/colors";
@@ -195,13 +196,27 @@ export function PlaceSearchModal({
       ).at(-1)
     : undefined;
 
-  const useCurrentLocation = () => {
+  const useCurrentLocation = async () => {
     setSortMode("current");
-    if (!curLoc && typeof navigator !== "undefined" && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (p) => setCurLoc({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => {}
-      );
+    if (curLoc) return;
+    try {
+      if (Platform.OS === "web") {
+        if (typeof navigator !== "undefined" && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (p) => setCurLoc({ lat: p.coords.latitude, lng: p.coords.longitude }),
+            () => {}
+          );
+        }
+      } else {
+        // 네이티브: expo-location (navigator.geolocation 없음)
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setCurLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      }
+    } catch {
+      // 위치 실패 시 무시 (거리순 '현재위치'만 비활성)
     }
   };
 
