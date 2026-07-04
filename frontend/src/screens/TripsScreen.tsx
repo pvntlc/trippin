@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import { tripApi, type Trip } from "../services/api";
+import { tripApi, type Trip, type TripInvite } from "../services/api";
 import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
 import { NewTripModal } from "./trip/NewTripModal";
@@ -16,7 +16,15 @@ export function TripsScreen({ navigation }: Props) {
   const { logout } = useAuth();
   const [showNew, setShowNew] = useState(false);
 
+  const qc = useQueryClient();
   const { data: trips, isLoading } = useQuery({ queryKey: ["trips"], queryFn: tripApi.list });
+  const { data: invites } = useQuery({ queryKey: ["invites"], queryFn: tripApi.invites, refetchInterval: 60_000 });
+  const inviteDone = () => {
+    qc.invalidateQueries({ queryKey: ["invites"] });
+    qc.invalidateQueries({ queryKey: ["trips"] });
+  };
+  const acceptMut = useMutation({ mutationFn: tripApi.acceptInvite, onSuccess: inviteDone });
+  const declineMut = useMutation({ mutationFn: tripApi.declineInvite, onSuccess: inviteDone });
 
   const renderItem = ({ item }: { item: Trip }) => (
     <TouchableOpacity
@@ -39,6 +47,22 @@ export function TripsScreen({ navigation }: Props) {
           <Text style={styles.logout}>로그아웃</Text>
         </TouchableOpacity>
       </View>
+
+      {/* 받은 초대 — 수락해야 여행에 들어감 */}
+      {(invites ?? []).map((inv: TripInvite) => (
+        <View key={inv.member_id} style={styles.inviteCard}>
+          <Text style={styles.inviteTitle}>💌 {inv.invited_by}님이 초대했어요</Text>
+          <Text style={styles.inviteSub}>{inv.title} · {inv.destination || "목적지 미정"} · {inv.start_date}~{inv.end_date}</Text>
+          <View style={styles.inviteRow}>
+            <TouchableOpacity style={styles.inviteAccept} onPress={() => acceptMut.mutate(inv.member_id)}>
+              <Text style={styles.inviteAcceptText}>수락</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.inviteDecline} onPress={() => declineMut.mutate(inv.member_id)}>
+              <Text style={styles.inviteDeclineText}>거절</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
 
       <FlatList
         data={trips}
@@ -66,6 +90,14 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, paddingTop: 8 },
   headerTitle: { fontSize: 24, fontWeight: "800", color: Colors.text },
   logout: { color: Colors.textMuted, fontSize: 14 },
+  inviteCard: { backgroundColor: Colors.bgCard, borderRadius: 14, padding: 14, marginHorizontal: 16, marginBottom: 4, borderWidth: 1.5, borderColor: Colors.accent },
+  inviteTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
+  inviteSub: { fontSize: 13, color: Colors.textSub, marginTop: 3 },
+  inviteRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  inviteAccept: { flex: 2, backgroundColor: Colors.accent, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  inviteAcceptText: { color: Colors.white, fontWeight: "800" },
+  inviteDecline: { flex: 1, backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  inviteDeclineText: { color: Colors.textSub, fontWeight: "700" },
   card: { backgroundColor: Colors.bgCard, borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
   cardTitle: { fontSize: 17, fontWeight: "700", color: Colors.text },
   cardSub: { fontSize: 14, color: Colors.textSub, marginTop: 4 },

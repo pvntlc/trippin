@@ -46,6 +46,8 @@ class TripMember(Base):
     trip_id: Mapped[int] = mapped_column(ForeignKey("trips.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     role: Mapped[str] = mapped_column(String(16), default="editor")
+    # 초대 수락 상태: pending(수락 대기) | accepted. 소유자는 항상 accepted.
+    status: Mapped[str] = mapped_column(String(16), default="accepted")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     trip: Mapped["Trip"] = relationship(back_populates="members")
@@ -85,6 +87,8 @@ class Expense(Base):
     currency: Mapped[str] = mapped_column(String(8), default="USD")
     category: Mapped[str] = mapped_column(String(50), default="")  # 식비/교통/숙박 등
     paid_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # 분담 참여자 user_id 목록(JSON 문자열). 빈 값 = 낸 사람 혼자 부담.
+    split_user_ids: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     trip: Mapped["Trip"] = relationship(back_populates="expenses")

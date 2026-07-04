@@ -21,12 +21,53 @@ async def _my_role(db: AsyncSession, trip_id: int, user_id: int) -> str | None:
     return m.role if m else None
 
 
+@router.get("/invites")
+async def my_invites(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """내가 받은 수락 대기 초대 목록."""
+    rows = await db.execute(
+        select(Trip, TripMember.id, TripMember.role)
+        .join(TripMember, TripMember.trip_id == Trip.id)
+        .where(TripMember.user_id == user.id, TripMember.status == "pending")
+        .order_by(Trip.start_date.desc())
+    )
+    out = []
+    for trip, member_id, role in rows.all():
+        owner = await db.get(User, trip.owner_id)
+        out.append({
+            "member_id": member_id, "trip_id": trip.id, "title": trip.title,
+            "destination": trip.destination,
+            "start_date": trip.start_date.isoformat(), "end_date": trip.end_date.isoformat(),
+            "role": role, "invited_by": owner.name if owner else "",
+        })
+    return out
+
+
+@router.post("/invites/{member_id}/accept")
+async def accept_invite(member_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    m = await db.get(TripMember, member_id)
+    if m is None or m.user_id != user.id or m.status != "pending":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "초대를 찾을 수 없음")
+    m.status = "accepted"
+    await db.commit()
+    return {"ok": True, "trip_id": m.trip_id}
+
+
+@router.post("/invites/{member_id}/decline")
+async def decline_invite(member_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    m = await db.get(TripMember, member_id)
+    if m is None or m.user_id != user.id or m.status != "pending":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "초대를 찾을 수 없음")
+    await db.delete(m)
+    await db.commit()
+    return {"ok": True}
+
+
 @router.get("", response_model=list[TripOut])
 async def list_trips(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     rows = await db.execute(
         select(Trip, TripMember.role)
         .join(TripMember, TripMember.trip_id == Trip.id)
-        .where(TripMember.user_id == user.id)
+        .where(TripMember.user_id == user.id, TripMember.status == "accepted")
         .order_by(Trip.start_date.desc())
     )
     out = []
@@ -80,11 +121,12 @@ async def delete_trip(trip: Trip = Depends(get_trip_for_member), user: User = De
 @router.get("/{trip_id}/members", response_model=list[MemberOut])
 async def list_members(trip: Trip = Depends(get_trip_for_member), db: AsyncSession = Depends(get_db)):
     rows = await db.execute(
-        select(User, TripMember.role)
+        select(User, TripMember.role, TripMember.status)
         .join(TripMember, TripMember.user_id == User.id)
         .where(TripMember.trip_id == trip.id)
     )
-    return [MemberOut(user=UserOut.model_validate(u), role=role) for u, role in rows.all()]
+    return [MemberOut(user=UserOut.model_validate(u), role=role, status=st)
+            for u, role, st in rows.all()]
 
 
 @router.post("/{trip_id}/invite", response_model=MemberOut, status_code=status.HTTP_201_CREATED)
@@ -101,6 +143,6 @@ async def invite_member(body: InviteRequest, trip: Trip = Depends(require_trip_e
     )
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "이미 멤버임")
-    db.add(TripMember(trip_id=trip.id, user_id=invitee.id, role=body.role))
+    db.add(TripMember(trip_id=trip.id, user_id=invitee.id, role=body.role, status="pending"))
     await db.commit()
-    return MemberOut(user=UserOut.model_validate(invitee), role=body.role)
+    return MemberOut(user=UserOut.model_validate(invitee), role=body.role, status="pending")

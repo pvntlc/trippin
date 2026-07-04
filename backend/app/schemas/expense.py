@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+import json
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExpenseCreate(BaseModel):
@@ -8,6 +10,8 @@ class ExpenseCreate(BaseModel):
     category: str = ""
     day_index: int | None = None
     paid_by: int | None = None
+    # 분담 참여자 user_id 목록. 빈 리스트 = 낸 사람 혼자 부담.
+    split_user_ids: list[int] = []
 
 
 class ExpenseUpdate(BaseModel):
@@ -17,6 +21,7 @@ class ExpenseUpdate(BaseModel):
     category: str | None = None
     day_index: int | None = None
     paid_by: int | None = None
+    split_user_ids: list[int] | None = None
 
 
 class ExpenseOut(BaseModel):
@@ -28,6 +33,17 @@ class ExpenseOut(BaseModel):
     currency: str
     category: str
     paid_by: int | None
+    split_user_ids: list[int] = []
+
+    @field_validator("split_user_ids", mode="before")
+    @classmethod
+    def _parse_split(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v) if v else []
+            except Exception:
+                return []
+        return v or []
 
     class Config:
         from_attributes = True

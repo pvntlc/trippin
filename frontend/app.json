@@ -38,6 +38,14 @@
         "projectId": "3b3a7626-db68-4be8-b73f-ab1e386553e3"
       }
     },
-    "owner": "pvntic"
+    "owner": "pvntic",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "여행지에 있을 때 지출 빠른 기록을 제안하기 위해 위치를 사용합니다."
+        }
+      ]
+    ]
   }
 }

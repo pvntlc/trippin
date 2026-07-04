@@ -23,6 +23,7 @@ class TripUpdate(BaseModel):
 class MemberOut(BaseModel):
     user: UserOut
     role: str
+    status: str = "accepted"
 
 
 class TripOut(BaseModel):
