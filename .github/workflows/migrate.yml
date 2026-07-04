@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "transfer-db | stop-old"
+        description: "transfer-db | stop-old | harden-old"
         required: true
-        default: "stop-old"
+        default: "harden-old"
 
 jobs:
   transfer:
@@ -47,3 +47,39 @@ jobs:
             sudo systemctl stop trippin
             sudo systemctl disable trippin
             echo "old trippin stopped:"; systemctl is-active trippin || true
+
+  harden-old:
+    if: ${{ inputs.mode == 'harden-old' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden old server (nginx admin block + fail2ban + auto-updates)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 2222
+          command_timeout: 15m
+          script: |
+            set -e
+            # 1) 구서버 stock-manager 는 별도 admin 토큰 코드가 없음 → nginx 에서 admin API 차단
+            SM=$(ls /etc/nginx/sites-enabled/ | grep -i stock | head -1)
+            if [ -n "$SM" ] && ! sudo grep -q "location /api/v1/admin/" /etc/nginx/sites-enabled/$SM; then
+              sudo sed -i '0,/location \/api\//s##location /api/v1/admin/ { return 403; }\n    location /api/#' /etc/nginx/sites-enabled/$SM
+              sudo nginx -t && sudo systemctl reload nginx && echo "admin API blocked at nginx"
+            else
+              echo "admin block already present or stock-manager site not found ($SM)"
+            fi
+            # 2) fail2ban + unattended-upgrades
+            export DEBIAN_FRONTEND=noninteractive
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq fail2ban unattended-upgrades >/dev/null 2>&1
+            printf '[sshd]\nenabled = true\nport = 22,2222\nmaxretry = 4\nbantime = 3600\n' | sudo tee /etc/fail2ban/jail.d/sshd.local >/dev/null
+            sudo systemctl enable fail2ban >/dev/null 2>&1; sudo systemctl restart fail2ban
+            printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null
+            sudo systemctl enable unattended-upgrades >/dev/null 2>&1
+            # 3) sshd: root 로그인 차단
+            printf 'PermitRootLogin no\nX11Forwarding no\nMaxAuthTries 3\n' | sudo tee /etc/ssh/sshd_config.d/99-hardening.conf >/dev/null
+            sudo sshd -t && sudo systemctl reload ssh && echo "sshd hardened"
+            echo "=== verify admin blocked ==="
+            curl -s -o /dev/null -w "admin/server-info via nginx: %{http_code}\n" http://127.0.0.1/api/v1/admin/server-info || true
