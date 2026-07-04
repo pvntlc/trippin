@@ -14,8 +14,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://trippin.168-107-45-67.sslip.io",
-        "EXPO_PUBLIC_KAKAO_KEY": "1a85d8c8171308078ff19234bc2ef7b3",
-        "EXPO_PUBLIC_KAKAO_NATIVE_KEY": "d065f09afb3455b85a31d9d71c5be145"
+        "EXPO_PUBLIC_KAKAO_KEY": "1a85d8c8171308078ff19234bc2ef7b3"
       }
     },
     "production": {
@@ -24,8 +23,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://trippin.168-107-45-67.sslip.io",
-        "EXPO_PUBLIC_KAKAO_KEY": "1a85d8c8171308078ff19234bc2ef7b3",
-        "EXPO_PUBLIC_KAKAO_NATIVE_KEY": "d065f09afb3455b85a31d9d71c5be145"
+        "EXPO_PUBLIC_KAKAO_KEY": "1a85d8c8171308078ff19234bc2ef7b3"
       }
     }
   },

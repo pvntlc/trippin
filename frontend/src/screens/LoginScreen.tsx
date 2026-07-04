@@ -5,17 +5,20 @@ import * as WebBrowser from "expo-web-browser";
 import { useAuthRequest, makeRedirectUri, ResponseType } from "expo-auth-session";
 
 import { useAuth } from "../store/auth";
+import { BASE_URL } from "../services/api";
 import { Colors } from "../constants/colors";
 
 // 웹에서 OAuth 팝업/리다이렉트 완료 처리
 WebBrowser.maybeCompleteAuthSession();
 
 const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_KEY || ""; // REST API 키 = OAuth client_id
-const KAKAO_NATIVE_KEY = process.env.EXPO_PUBLIC_KAKAO_NATIVE_KEY || ""; // 네이티브 리다이렉트 스킴용
-const discovery = {
-  authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
-  tokenEndpoint: "https://kauth.kakao.com/oauth/token",
-};
+const AUTH_ENDPOINT = "https://kauth.kakao.com/oauth/authorize";
+const discovery = { authorizationEndpoint: AUTH_ENDPOINT, tokenEndpoint: "https://kauth.kakao.com/oauth/token" };
+
+// 네이티브: 카카오는 커스텀 스킴 Redirect URI 를 안 받으므로 서버 https 브리지를 거쳐
+// trippin://oauth 로 되돌아온다. 웹: 현재 origin + /oauth.
+const NATIVE_RETURN = "trippin://oauth";
+const BRIDGE_URI = `${BASE_URL}/auth/kakao/bridge`;
 
 export function LoginScreen() {
   const { login, loginWithKakao, sessionMessage } = useAuth();
@@ -27,21 +30,10 @@ export function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // 웹: 현재 origin + /oauth  ·  네이티브: kakao{NATIVE_KEY}://oauth (카카오 허용 형식)
-  const redirectUri = makeRedirectUri({
-    native: KAKAO_NATIVE_KEY ? `kakao${KAKAO_NATIVE_KEY}://oauth` : undefined,
-    scheme: "trippin",
-    path: "oauth",
-  });
-
+  // 웹 전용: expo-auth-session 이 origin/oauth 로 리다이렉트를 처리
+  const webRedirectUri = makeRedirectUri({ scheme: "trippin", path: "oauth" });
   const [request, response, promptAsync] = useAuthRequest(
-    {
-      clientId: KAKAO_KEY,
-      redirectUri,
-      responseType: ResponseType.Code,
-      usePKCE: false, // 토큰 교환은 서버에서 client_secret 으로 처리
-      scopes: [],
-    },
+    { clientId: KAKAO_KEY, redirectUri: webRedirectUri, responseType: ResponseType.Code, usePKCE: false, scopes: [] },
     discovery
   );
 
@@ -51,7 +43,7 @@ export function LoginScreen() {
         setBusy(true);
         setError(null);
         try {
-          await loginWithKakao(response.params.code, redirectUri);
+          await loginWithKakao(response.params.code, webRedirectUri);
         } catch (e: any) {
           setError(e?.message ?? "카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
         } finally {
@@ -69,7 +61,30 @@ export function LoginScreen() {
       setError("카카오 로그인 설정이 아직 준비되지 않았어요.");
       return;
     }
-    await promptAsync();
+    if (Platform.OS === "web") {
+      await promptAsync();
+      return;
+    }
+    // 네이티브: https 브리지를 redirect_uri 로 써서 인가 → 브리지가 trippin://oauth 로 딥링크
+    setBusy(true);
+    try {
+      const authUrl =
+        `${AUTH_ENDPOINT}?client_id=${encodeURIComponent(KAKAO_KEY)}` +
+        `&redirect_uri=${encodeURIComponent(BRIDGE_URI)}&response_type=code`;
+      const res = await WebBrowser.openAuthSessionAsync(authUrl, NATIVE_RETURN);
+      if (res.type === "success" && res.url) {
+        const m = res.url.match(/[?&]code=([^&]+)/);
+        if (m) {
+          await loginWithKakao(decodeURIComponent(m[1]), BRIDGE_URI);
+        } else {
+          setError("카카오 로그인이 취소되었거나 실패했어요.");
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message ?? "카카오 로그인에 실패했어요.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onEmailLogin = async () => {

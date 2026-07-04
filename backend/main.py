@@ -59,6 +59,30 @@ async def health():
     return {"status": "ok", "service": "trippin"}
 
 
+@app.get("/auth/kakao/bridge")
+async def kakao_bridge(code: str = "", error: str = ""):
+    """카카오 로그인 네이티브 브리지.
+
+    카카오는 로그인 Redirect URI 로 커스텀 스킴을 허용하지 않으므로, https 인 이 페이지를
+    Redirect URI 로 등록한다. 카카오가 ?code 를 붙여 여기로 돌아오면, 앱 커스텀 스킴
+    trippin://oauth 로 딥링크해 인가코드를 앱에 되돌려준다(WebBrowser 세션이 이를 감지).
+    """
+    import json
+    from fastapi.responses import HTMLResponse
+
+    q = f"code={code}" if code else f"error={error or 'login_failed'}"
+    target = f"trippin://oauth?{q}"
+    t = json.dumps(target)
+    html = (
+        "<!doctype html><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<script>location.replace({t})</script>"
+        "<p style='font-family:sans-serif;text-align:center;margin-top:48px;color:#333'>"
+        f"앱으로 돌아가는 중… <br><a href={t}>자동으로 안 되면 여기를 누르세요</a></p>"
+    )
+    return HTMLResponse(html)
+
+
 # 프론트엔드 정적 파일 서빙 (운영 배포 시 backend/web 에 Expo web 빌드를 풀어둠).
 # API/health 라우트가 먼저 등록되므로 "/" 마운트는 나머지 경로만 처리한다.
 # SPA(react-navigation) 딥링크(/trip/123 등) 새로고침 시에도 index.html 을 돌려준다.
