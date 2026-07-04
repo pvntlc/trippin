@@ -1,6 +1,6 @@
 // 네이티브(iOS/Android) 지도 — react-native-maps.
 // 웹에서는 PlacesMap.web.tsx 가 대신 사용됨 (Metro 가 플랫폼별로 해석).
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
@@ -12,13 +12,25 @@ export function PlacesMap({
   places,
   routes = [],
   stations = [],
+  focus = null,
 }: {
   places: MapPlace[];
   routes?: MapRoute[];
   stations?: MapStation[];
+  focus?: { lat: number; lng: number; seq: number } | null;
 }) {
   const c = mapCenter(places);
   const mapRef = useRef<MapView | null>(null);
+
+  // 하단 칩 탭 → 해당 위치로 이동
+  useEffect(() => {
+    if (focus) {
+      mapRef.current?.animateToRegion(
+        { latitude: focus.lat, longitude: focus.lng, latitudeDelta: 0.02, longitudeDelta: 0.02 },
+        500
+      );
+    }
+  }, [focus?.seq]);
 
   const goToMyLocation = async () => {
     try {

@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import React, { useMemo, useRef, useState } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity } from "react-native";
 import { useQuery, useQueries } from "@tanstack/react-query";
 
 import { placeApi, mapsApi, type Place, type TransitOption, type LatLngTuple } from "../../services/api";
@@ -33,6 +33,11 @@ export function MapTab({
     queryKey: ["places", tripId],
     queryFn: () => placeApi.list(tripId),
   });
+
+  // 하단 칩 탭 → 그 위치로 지도 이동 (seq 로 같은 곳 다시 눌러도 재이동)
+  const seq = useRef(0);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; seq: number } | null>(null);
+  const focusOn = (p: MapPlace) => { seq.current += 1; setFocus({ lat: p.lat, lng: p.lng, seq: seq.current }); };
 
   const mapPlaces: MapPlace[] = useMemo(
     () =>
@@ -127,7 +132,7 @@ export function MapTab({
 
   return (
     <View style={styles.container}>
-      <PlacesMap places={mapPlaces} routes={routes} stations={stations} />
+      <PlacesMap places={mapPlaces} routes={routes} stations={stations} focus={focus} />
       <View style={styles.badge}>
         <Text style={styles.badgeText}>
           📍 {mapPlaces.length}곳{routes.length ? ` · ${routes.length}구간 경로` : ""}{stations.length ? ` · 🚉 ${stations.length}역` : ""}
@@ -142,10 +147,10 @@ export function MapTab({
         contentContainerStyle={styles.pinListContent}
       >
         {mapPlaces.map((p) => (
-          <View key={p.id} style={styles.pinChip}>
+          <TouchableOpacity key={p.id} style={styles.pinChip} activeOpacity={0.7} onPress={() => focusOn(p)}>
             <View style={[styles.pinDot, { backgroundColor: dayColor(p.day_index ?? 0) }]} />
             <Text style={styles.pinChipText} numberOfLines={1}>{p.name}</Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
     </View>

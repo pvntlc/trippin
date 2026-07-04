@@ -99,15 +99,22 @@ export function PlacesMap({
   places,
   routes = [],
   stations = [],
+  focus = null,
 }: {
   places: MapPlace[];
   routes?: MapRoute[];
   stations?: MapStation[];
+  focus?: { lat: number; lng: number; seq: number } | null;
 }) {
   const c = mapCenter(places);
   const [selected, setSelected] = useState<MapPlace | null>(null);
   const [gmap, setGmap] = useState<any>(null);
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+
+  // 하단 칩 탭 → 해당 위치로 이동
+  useEffect(() => {
+    if (focus && gmap) { gmap.panTo({ lat: focus.lat, lng: focus.lng }); gmap.setZoom(15); }
+  }, [focus?.seq, gmap]);
 
   const goToMyLocation = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
