@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # NAVITIME (일본 대중교통 경로, RapidAPI). 구글이 일본 transit 미지원이라 대체.
     navitime_api_key: str = ""
 
+    # 카카오 로그인 (developers.kakao.com). REST API 키 = OAuth client_id.
+    # client_secret 은 콘솔에서 발급(사용 ON)하면 토큰 교환에 필요.
+    kakao_rest_api_key: str = ""
+    kakao_client_secret: str = ""
+
     # CORS (콤마 구분 문자열)
     cors_origins: str = "*"
 

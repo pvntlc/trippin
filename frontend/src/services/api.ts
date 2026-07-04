@@ -174,10 +174,10 @@ export type TripInvite = {
 
 // ── Auth ──────────────────────────────────────────────
 export const authApi = {
-  register: (email: string, password: string, name: string) =>
-    request<{ access_token: string }>("/auth/register", {
+  kakao: (code: string, redirect_uri: string) =>
+    request<{ access_token: string }>("/auth/kakao", {
       method: "POST",
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ code, redirect_uri }),
     }),
   login: async (email: string, password: string) => {
     // OAuth2 password flow 는 form-urlencoded
