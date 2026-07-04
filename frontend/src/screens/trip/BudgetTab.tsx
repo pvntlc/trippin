@@ -3,10 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Activity
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 
-import { expenseApi, memberApi, placeApi, authApi, type Expense } from "../../services/api";
+import { expenseApi, memberApi, placeApi, authApi, fxApi, type Expense } from "../../services/api";
 import { Colors } from "../../constants/colors";
 
 const CATEGORIES = ["식비", "교통", "숙박", "관광", "쇼핑", "기타"];
+const FX_CURRENCIES = ["KRW", "JPY", "USD", "EUR"];
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -30,6 +31,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   const [paidBy, setPaidBy] = useState<number | null>(null);
   const [splitIds, setSplitIds] = useState<number[]>([]);
   const [atDestination, setAtDestination] = useState(false);
+  const [expCurrency, setExpCurrency] = useState(currency);   // 지출별 통화(엔·원 동시 사용)
 
   const { data: expenses, isLoading } = useQuery({
     queryKey: ["expenses", tripId],
@@ -39,6 +41,11 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
     queryKey: ["expenses-summary", tripId],
     queryFn: () => expenseApi.summary(tripId),
   });
+  const { data: fx } = useQuery({ queryKey: ["fx-krw"], queryFn: fxApi.krw, staleTime: 6 * 3600_000 });
+  const krwPer = fx?.krw_per ?? {};
+  // 금액→원화. 환율 없으면 null.
+  const toKRW = (amt: number, cur: string): number | null =>
+    krwPer[cur] ? Math.round(amt * krwPer[cur]) : (cur === "KRW" ? Math.round(amt) : null);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: authApi.me, staleTime: Infinity });
   const { data: members } = useQuery({
     queryKey: ["members", tripId],
@@ -81,6 +88,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   const openAdd = () => {
     setPaidBy(me?.id ?? null);
     setSplitIds(accepted.map(m => m.user.id));   // 기본 = 전원 분담
+    setExpCurrency(currency);
     setShow(true);
   };
 
@@ -101,13 +109,11 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
       const asset = res.assets[0];
       setScanning(true);
       const parsed = await expenseApi.parseReceipt(tripId, asset.base64!, asset.mimeType || "image/jpeg");
+      openAdd();
       if (parsed.title) setTitle(parsed.title);
       if (parsed.amount) setAmount(String(parsed.amount));
       if (parsed.category && CATEGORIES.includes(parsed.category)) setCategory(parsed.category);
-      openAdd();
-      if (parsed.currency && parsed.currency !== currency) {
-        notify(`영수증 통화(${parsed.currency})가 여행 통화(${currency})와 달라요. 금액을 확인해 주세요.`);
-      }
+      if (parsed.currency) setExpCurrency(parsed.currency);   // 영수증 통화 그대로 사용
     } catch (e: any) {
       notify(e?.message ?? "영수증을 읽지 못했어요. 직접 입력해 주세요.");
     } finally {
@@ -118,7 +124,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   const addMut = useMutation({
     mutationFn: () =>
       expenseApi.add(tripId, {
-        title: title.trim(), amount: Number(amount) || 0, currency, category,
+        title: title.trim(), amount: Number(amount) || 0, currency: expCurrency, category,
         paid_by: paidBy ?? undefined,
         split_user_ids: splitIds.length ? splitIds : (paidBy ? [paidBy] : []),
       }),
@@ -135,6 +141,9 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   }
 
   const totals = summary?.by_currency ?? {};
+  // 전체 지출 원화 환산 합계 + 환산 불가 통화 여부
+  const krwTotal = (expenses ?? []).reduce((s, e) => { const k = toKRW(e.amount, e.currency); return k != null ? s + k : s; }, 0);
+  const showKrwTotal = krwTotal > 0 && (Object.keys(totals).some((c) => c !== "KRW"));
   const settlements = summary?.settlements ?? [];
   const toggleSplit = (id: number) =>
     setSplitIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -158,6 +167,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
             <Text key={cur} style={styles.totalValue}>{fmt(amt)} {cur}</Text>
           ))
         )}
+        {showKrwTotal && <Text style={styles.krwTotal}>원화 환산 ≈ ₩{fmt(krwTotal)}</Text>}
         {summary && Object.keys(summary.by_category).length > 0 && (
           <View style={styles.catRow}>
             {Object.entries(summary.by_category).map(([cat, amt]) => (
@@ -201,7 +211,12 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
                   <Text style={styles.perPerson}>1인당 {fmt(per)} {item.currency}</Text>
                 )}
               </View>
-              <Text style={styles.amount}>{fmt(item.amount)} {item.currency}</Text>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.amount}>{fmt(item.amount)} {item.currency}</Text>
+                {item.currency !== "KRW" && toKRW(item.amount, item.currency) != null && (
+                  <Text style={styles.amountKrw}>≈ ₩{fmt(toKRW(item.amount, item.currency)!)}</Text>
+                )}
+              </View>
               {canEdit && (
                 <TouchableOpacity onPress={() => removeMut.mutate(item.id)}>
                   <Text style={styles.delete}>✕</Text>
@@ -232,7 +247,20 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>지출 추가</Text>
             <TextInput style={styles.input} placeholder="내용 (예: 호텔 2박)" value={title} onChangeText={setTitle} placeholderTextColor={Colors.textMuted} />
-            <TextInput style={styles.input} placeholder={`금액 (${currency})`} value={amount} onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ""))} keyboardType="numeric" inputMode="decimal" placeholderTextColor={Colors.textMuted} />
+            <TextInput style={styles.input} placeholder={`금액 (${expCurrency})`} value={amount} onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ""))} keyboardType="numeric" inputMode="decimal" placeholderTextColor={Colors.textMuted} />
+            <View style={styles.curRow}>
+              {FX_CURRENCIES.map((c) => (
+                <TouchableOpacity key={c} onPress={() => setExpCurrency(c)} style={[styles.curOpt, expCurrency === c && styles.catOptOn]}>
+                  <Text style={[styles.catOptText, expCurrency === c && styles.catOptTextOn]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+              {!FX_CURRENCIES.includes(expCurrency) && (
+                <View style={[styles.curOpt, styles.catOptOn]}><Text style={styles.catOptTextOn}>{expCurrency}</Text></View>
+              )}
+            </View>
+            {expCurrency !== "KRW" && Number(amount) > 0 && toKRW(Number(amount), expCurrency) != null && (
+              <Text style={styles.curKrwHint}>≈ ₩{fmt(toKRW(Number(amount), expCurrency)!)}</Text>
+            )}
             <View style={styles.catPick}>
               {CATEGORIES.map((c) => (
                 <TouchableOpacity key={c} onPress={() => setCategory(c)} style={[styles.catOpt, category === c && styles.catOptOn]}>
@@ -268,7 +296,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
                   ))}
                 </View>
                 {splitIds.length > 1 && Number(amount) > 0 && (
-                  <Text style={styles.splitHint}>1인당 {fmt(Number(amount) / splitIds.length)} {currency}</Text>
+                  <Text style={styles.splitHint}>1인당 {fmt(Number(amount) / splitIds.length)} {expCurrency}</Text>
                 )}
               </>
             )}
@@ -296,6 +324,11 @@ const styles = StyleSheet.create({
   totalCard: { backgroundColor: Colors.accentDeep, borderRadius: 16, padding: 18, marginBottom: 12 },
   totalLabel: { color: "rgba(255,255,255,0.8)", fontSize: 13 },
   totalValue: { color: Colors.white, fontSize: 26, fontWeight: "800", marginTop: 2 },
+  krwTotal: { color: Colors.white, fontSize: 15, fontWeight: "700", marginTop: 6, opacity: 0.92 },
+  amountKrw: { fontSize: 11.5, color: Colors.textMuted, fontWeight: "700", marginTop: 1 },
+  curRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4, marginBottom: 4 },
+  curOpt: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: Colors.bgCardAlt },
+  curKrwHint: { fontSize: 12.5, color: Colors.accentDeep, fontWeight: "700", marginBottom: 4, marginLeft: 2 },
   catRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   catChip: { color: Colors.white, fontSize: 12, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, overflow: "hidden" },
   settleCard: { backgroundColor: Colors.bgCard, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: Colors.accent + "55" },

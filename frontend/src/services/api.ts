@@ -245,6 +245,12 @@ export const expenseApi = {
     ),
 };
 
+// ── 환율 (원화 환산) ───────────────────────────────────
+export const fxApi = {
+  // { krw_per: { JPY: 9.1, USD: 1380, KRW: 1, ... } } — 1단위당 원화
+  krw: () => request<{ krw_per: Record<string, number> }>("/fx/krw"),
+};
+
 // ── Checklist ─────────────────────────────────────────
 export const checklistApi = {
   list: (tripId: number) => request<ChecklistItem[]>(`/trips/${tripId}/checklist`),
