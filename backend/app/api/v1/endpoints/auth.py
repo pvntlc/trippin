@@ -75,6 +75,7 @@ async def kakao_login(request: Request, body: KakaoLoginRequest, db: AsyncSessio
     user = await db.scalar(
         select(User).where(User.provider == "kakao", User.provider_id == kakao_id)
     )
+    is_new = user is None
     if user is None:
         # 이메일 컬럼은 NOT NULL + unique — 실이메일이 있고 중복 아니면 사용, 아니면 합성
         email = real_email
@@ -95,7 +96,7 @@ async def kakao_login(request: Request, body: KakaoLoginRequest, db: AsyncSessio
         await db.commit()
         await db.refresh(user)
 
-    return TokenResponse(access_token=create_access_token(user.id))
+    return TokenResponse(access_token=create_access_token(user.id), is_new=is_new)
 
 
 @router.get("/me", response_model=UserOut)

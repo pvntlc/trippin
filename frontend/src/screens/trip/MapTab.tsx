@@ -39,18 +39,36 @@ export function MapTab({
   const [focus, setFocus] = useState<{ lat: number; lng: number; seq: number } | null>(null);
   const focusOn = (p: MapPlace) => { seq.current += 1; setFocus({ lat: p.lat, lng: p.lng, seq: seq.current }); };
 
+  // 일별 필터 — "all" | day_index | "wish"(가고 싶은 곳)
+  const [dayFilter, setDayFilter] = useState<number | "all" | "wish">("all");
+  const daysPresent = useMemo(() => {
+    const s = new Set<number>();
+    let hasWish = false;
+    (places ?? []).forEach((p) => {
+      if (p.lat == null || p.lng == null) return;
+      if (p.day_index == null) hasWish = true; else s.add(p.day_index);
+    });
+    return { days: [...s].sort((a, b) => a - b), hasWish };
+  }, [places]);
+  const fplaces = useMemo(() => {
+    const all = places ?? [];
+    if (dayFilter === "all") return all;
+    if (dayFilter === "wish") return all.filter((p) => p.day_index == null);
+    return all.filter((p) => p.day_index === dayFilter);
+  }, [places, dayFilter]);
+
   const mapPlaces: MapPlace[] = useMemo(
     () =>
-      (places ?? [])
+      fplaces
         .filter((p) => p.lat != null && p.lng != null)
         .map((p) => ({ id: p.id, name: p.name, lat: p.lat as number, lng: p.lng as number, day_index: p.day_index })),
-    [places]
+    [fplaces]
   );
 
   // 연속 장소쌍(구간) — 일정 탭과 같은 키(`${prevId}-${id}`) 로 매칭
   const legs: Leg[] = useMemo(() => {
     const byDay: Record<string, Place[]> = {};
-    (places ?? [])
+    fplaces
       .filter((p) => p.lat != null && p.lng != null && p.day_index !== null)
       .forEach((p) => {
         (byDay[String(p.day_index)] ??= []).push(p);
@@ -63,7 +81,7 @@ export function MapTab({
       }
     });
     return out;
-  }, [places]);
+  }, [fplaces]);
 
   // 구간별 실제 경로 지오메트리 조회 (대중교통이고 선택해둔 게 있으면 그 경로, 아니면 모드대로 조회)
   const queries = useQueries({
@@ -122,13 +140,16 @@ export function MapTab({
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
   }
 
-  if (mapPlaces.length === 0) {
+  const totalCoord = (places ?? []).filter((p) => p.lat != null && p.lng != null).length;
+  if (totalCoord === 0) {
     return (
       <View style={styles.center}>
         <Text style={styles.empty}>지도에 표시할 장소가 없어요.{"\n"}일정 탭에서 장소를 추가해 보세요.</Text>
       </View>
     );
   }
+
+  const showDayChips = daysPresent.days.length + (daysPresent.hasWish ? 1 : 0) >= 2;
 
   return (
     <View style={styles.container}>
@@ -138,6 +159,26 @@ export function MapTab({
           📍 {mapPlaces.length}곳{routes.length ? ` · ${routes.length}구간 경로` : ""}{stations.length ? ` · 🚉 ${stations.length}역` : ""}
         </Text>
       </View>
+
+      {/* 일별 필터 */}
+      {showDayChips && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayFilter} contentContainerStyle={styles.dayFilterRow}>
+          <TouchableOpacity style={[styles.dayChip, dayFilter === "all" && styles.dayChipOn]} onPress={() => setDayFilter("all")}>
+            <Text style={[styles.dayChipText, dayFilter === "all" && styles.dayChipTextOn]}>전체</Text>
+          </TouchableOpacity>
+          {daysPresent.days.map((d) => (
+            <TouchableOpacity key={d} style={[styles.dayChip, dayFilter === d && styles.dayChipOn]} onPress={() => setDayFilter(d)}>
+              <View style={[styles.dayChipDot, { backgroundColor: dayColor(d) }]} />
+              <Text style={[styles.dayChipText, dayFilter === d && styles.dayChipTextOn]}>Day {d + 1}</Text>
+            </TouchableOpacity>
+          ))}
+          {daysPresent.hasWish && (
+            <TouchableOpacity style={[styles.dayChip, dayFilter === "wish" && styles.dayChipOn]} onPress={() => setDayFilter("wish")}>
+              <Text style={[styles.dayChipText, dayFilter === "wish" && styles.dayChipTextOn]}>가고 싶은 곳</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      )}
 
       {/* 지도에 찍힌 핀이 어떤 장소인지 텍스트로 (하단 스트립) */}
       <ScrollView
@@ -163,6 +204,13 @@ const styles = StyleSheet.create({
   empty: { color: Colors.textMuted, textAlign: "center", lineHeight: 22 },
   badge: { position: "absolute", top: 12, left: 12, backgroundColor: Colors.bgCard, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border },
   badgeText: { fontSize: 13, fontWeight: "700", color: Colors.text },
+  dayFilter: { position: "absolute", top: 48, left: 0, right: 0, maxHeight: 40 },
+  dayFilterRow: { paddingHorizontal: 12, gap: 6, alignItems: "center" },
+  dayChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.bgCard, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border },
+  dayChipOn: { backgroundColor: Colors.accentDeep, borderColor: Colors.accentDeep },
+  dayChipDot: { width: 8, height: 8, borderRadius: 4 },
+  dayChipText: { fontSize: 12.5, fontWeight: "700", color: Colors.textSub },
+  dayChipTextOn: { color: Colors.white },
   pinList: { position: "absolute", bottom: 12, left: 0, right: 0, maxHeight: 44 },
   pinListContent: { paddingHorizontal: 12, gap: 8, alignItems: "center" },
   pinChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bgCard, borderRadius: 16, paddingLeft: 8, paddingRight: 12, paddingVertical: 7, borderWidth: 1, borderColor: Colors.border, maxWidth: 180 },

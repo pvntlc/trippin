@@ -187,7 +187,7 @@ export type TripInvite = {
 // ── Auth ──────────────────────────────────────────────
 export const authApi = {
   kakao: (code: string, redirect_uri: string) =>
-    request<{ access_token: string }>("/auth/kakao", {
+    request<{ access_token: string; is_new?: boolean }>("/auth/kakao", {
       method: "POST",
       body: JSON.stringify({ code, redirect_uri }),
     }),

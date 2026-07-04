@@ -6,7 +6,7 @@ import { authApi } from "../services/api";
 import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
 
-export function ProfileModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function ProfileModal({ visible, welcome = false, onClose }: { visible: boolean; welcome?: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const { logout } = useAuth();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: authApi.me, enabled: visible });
@@ -39,9 +39,10 @@ export function ProfileModal({ visible, onClose }: { visible: boolean; onClose: 
       <View style={styles.bg}>
         <View style={styles.card}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>프로필</Text>
-            <TouchableOpacity onPress={onClose}><Text style={styles.close}>닫기</Text></TouchableOpacity>
+            <Text style={styles.title}>{welcome ? "환영해요! 🎉" : "프로필"}</Text>
+            <TouchableOpacity onPress={onClose}><Text style={styles.close}>{welcome ? "나중에" : "닫기"}</Text></TouchableOpacity>
           </View>
+          {welcome && <Text style={styles.welcomeMsg}>트리핀에서 쓸 닉네임을 정해주세요. 카카오 이름 그대로 써도 돼요.</Text>}
 
           <Text style={styles.label}>닉네임</Text>
           <TextInput
@@ -77,6 +78,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   title: { fontSize: 18, fontWeight: "700", color: Colors.text },
+  welcomeMsg: { fontSize: 13.5, color: Colors.textSub, marginTop: 8, lineHeight: 19 },
   close: { color: Colors.textMuted, fontSize: 14 },
   label: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 16, marginBottom: 8 },
   input: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.text },

@@ -9,6 +9,7 @@ class KakaoLoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    is_new: bool = False   # 이번 로그인에서 계정이 새로 생성됐는지(닉네임 설정 유도용)
 
 
 class UserOut(BaseModel):

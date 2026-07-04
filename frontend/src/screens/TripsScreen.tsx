@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { tripApi, type Trip, type TripInvite } from "../services/api";
+import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
 import { NewTripModal } from "./trip/NewTripModal";
 import { ProfileModal } from "./ProfileModal";
@@ -15,6 +16,13 @@ type Props = NativeStackScreenProps<RootStackParamList, "Trips">;
 export function TripsScreen({ navigation }: Props) {
   const [showNew, setShowNew] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [welcome, setWelcome] = useState(false);
+  const { needsProfileSetup, clearProfileSetup } = useAuth();
+
+  // 카카오 첫 로그인 → 닉네임 설정 유도
+  useEffect(() => {
+    if (needsProfileSetup) { setWelcome(true); setShowProfile(true); clearProfileSetup(); }
+  }, [needsProfileSetup, clearProfileSetup]);
 
   const qc = useQueryClient();
   const { data: trips, isLoading } = useQuery({ queryKey: ["trips"], queryFn: tripApi.list });
@@ -83,7 +91,7 @@ export function TripsScreen({ navigation }: Props) {
       </TouchableOpacity>
 
       <NewTripModal visible={showNew} onClose={() => setShowNew(false)} />
-      <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
+      <ProfileModal visible={showProfile} welcome={welcome} onClose={() => { setShowProfile(false); setWelcome(false); }} />
     </SafeAreaView>
   );
 }

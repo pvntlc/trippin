@@ -18,6 +18,8 @@ type AuthState = {
   sessionMessage: string | null;
   login: (email: string, password: string) => Promise<void>;
   loginWithKakao: (code: string, redirectUri: string) => Promise<void>;
+  needsProfileSetup: boolean;         // 카카오 첫 로그인 → 닉네임 설정 유도
+  clearProfileSetup: () => void;
   logout: () => Promise<void>;
   markActivity: () => void;
 };
@@ -28,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
+  const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
 
   const tokenRef = useRef<string | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
@@ -148,14 +151,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persist]);
 
   const loginWithKakao = useCallback(async (code: string, redirectUri: string) => {
-    const { access_token } = await authApi.kakao(code, redirectUri);
+    const { access_token, is_new } = await authApi.kakao(code, redirectUri);
     await persist(access_token);
+    if (is_new) setNeedsProfileSetup(true);   // 첫 로그인 → 닉네임 설정 유도
   }, [persist]);
+  const clearProfileSetup = useCallback(() => setNeedsProfileSetup(false), []);
 
   const logout = useCallback(async () => { await doLogout("manual"); }, [doLogout]);
 
   return (
-    <AuthContext.Provider value={{ token, loading, sessionMessage, login, loginWithKakao, logout, markActivity }}>
+    <AuthContext.Provider value={{ token, loading, sessionMessage, login, loginWithKakao, needsProfileSetup, clearProfileSetup, logout, markActivity }}>
       {children}
     </AuthContext.Provider>
   );
