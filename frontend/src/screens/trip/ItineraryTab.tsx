@@ -92,6 +92,13 @@ export function ItineraryTab({
     queryFn: () => placeApi.list(tripId),
   });
 
+  // 행에서 바로 삭제 (실수 방지 2단계: ✕ → 삭제?)
+  const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  const removeMut = useMutation({
+    mutationFn: (id: number) => placeApi.remove(tripId, id),
+    onSuccess: () => { setConfirmDel(null); qc.invalidateQueries({ queryKey: ["places", tripId] }); },
+  });
+
   const optimizeMut = useMutation({
     mutationFn: async (dayPlaces: Place[]) => {
       const ordered = optimizeRoute(dayPlaces);
@@ -194,6 +201,17 @@ export function ItineraryTab({
                 {!!item.note && <Text style={styles.placeAddr}>{item.note}</Text>}
               </View>
               {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
+              {canEdit && (
+                <TouchableOpacity
+                  style={styles.delBtn}
+                  onPress={() => (confirmDel === item.id ? removeMut.mutate(item.id) : setConfirmDel(item.id))}
+                  hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.delText, confirmDel === item.id && styles.delTextConfirm]}>
+                    {confirmDel === item.id ? "삭제?" : "✕"}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           </>
         )}
@@ -265,6 +283,9 @@ const styles = StyleSheet.create({
   placeAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   placeNote: { fontSize: 12, color: Colors.textSub, marginTop: 4 },
   tag: { fontSize: 11, color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  delBtn: { paddingHorizontal: 4, paddingVertical: 2, marginLeft: 2 },
+  delText: { fontSize: 16, color: Colors.textMuted, fontWeight: "700" },
+  delTextConfirm: { fontSize: 13, color: Colors.danger, fontWeight: "800" },
   fab: { position: "absolute", left: 16, right: 16, bottom: 20, backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 15, alignItems: "center", elevation: 4 },
   fabText: { color: Colors.white, fontSize: 16, fontWeight: "700" },
 });
