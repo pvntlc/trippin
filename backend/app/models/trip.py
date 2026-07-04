@@ -73,6 +73,8 @@ class Place(Base):
     category: Mapped[str] = mapped_column(String(50), default="")  # 명소/식당/숙소 등
     planned_time: Mapped[str] = mapped_column(String(20), default="")  # "09:30" 같은 표시용
     note: Mapped[str] = mapped_column(Text, default="")
+    # 직전 장소→이 장소 이동수단 저장(walking/transit/driving). 빈 값이면 기본 도보.
+    leg_mode: Mapped[str] = mapped_column(String(16), default="")
 
     trip: Mapped["Trip"] = relationship(back_populates="places")
 

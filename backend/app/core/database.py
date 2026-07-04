@@ -30,6 +30,7 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN provider VARCHAR(16) DEFAULT 'local'",
             "ALTER TABLE users ADD COLUMN provider_id VARCHAR(64) DEFAULT ''",
             "ALTER TABLE trips ADD COLUMN cities TEXT DEFAULT ''",
+            "ALTER TABLE places ADD COLUMN leg_mode VARCHAR(16) DEFAULT ''",
         ]:
             try:
                 await conn.execute(text(sql))

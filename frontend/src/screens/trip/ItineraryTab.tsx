@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -129,6 +129,23 @@ export function ItineraryTab({
     return result;
   }, [trip, places, dayCount]);
 
+  // 저장된 이동수단(place.leg_mode)을 legModes 상태에 씨딩 — 새로고침 후에도 유지.
+  // 이미 있는 키(사용자가 방금 바꾼 값)는 덮어쓰지 않음.
+  useEffect(() => {
+    setLegModes((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const sec of sections) {
+        for (let i = 1; i < sec.data.length; i++) {
+          const k = `${sec.data[i - 1].id}-${sec.data[i].id}`;
+          const m = sec.data[i].leg_mode;
+          if (m && !next[k]) { next[k] = m as LegMode; changed = true; }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [sections, setLegModes]);
+
   const openSearch = (day: number | null | undefined) => { setSearchDay(day); setShowSearch(true); };
 
   if (isLoading) {
@@ -180,7 +197,11 @@ export function ItineraryTab({
                   from={prev}
                   to={item}
                   mode={legModes[key] ?? "walking"}
-                  onMode={(m) => setLegModes((s) => ({ ...s, [key]: m }))}
+                  onMode={(m) => {
+                    setLegModes((s) => ({ ...s, [key]: m }));
+                    // 목적지 장소에 이동수단 저장 → 새로고침 후에도 유지
+                    placeApi.update(tripId, item.id, { leg_mode: m }).catch(() => {});
+                  }}
                   chosen={transitChoices[key] ?? null}
                   onOpenTransit={() => setTransitModal({ from: prev, to: item, key })}
                 />

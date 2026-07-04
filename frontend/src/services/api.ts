@@ -109,6 +109,7 @@ export type Place = {
   lat: number | null;
   lng: number | null;
   note: string;
+  leg_mode?: string;   // 직전 장소→이 장소 이동수단(walking/transit/driving)
 };
 
 export type PlaceSearchResult = {

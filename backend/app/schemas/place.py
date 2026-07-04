@@ -23,6 +23,8 @@ class PlaceUpdate(BaseModel):
     category: str | None = None
     planned_time: str | None = None
     note: str | None = None
+    # 직전 장소에서 이 장소로 오는 이동수단(walking/transit/driving)
+    leg_mode: str | None = None
 
 
 class PlaceOut(BaseModel):
@@ -38,6 +40,7 @@ class PlaceOut(BaseModel):
     category: str
     planned_time: str
     note: str
+    leg_mode: str = ""
 
     class Config:
         from_attributes = True
