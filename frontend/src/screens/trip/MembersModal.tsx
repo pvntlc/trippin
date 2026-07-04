@@ -70,7 +70,7 @@ export function MembersModal({
                     <Text style={styles.memberName}>{item.user.name}</Text>
                     <Text style={styles.memberEmail}>{item.user.email}</Text>
                   </View>
-                  <Text style={[styles.roleBadge, item.role === "owner" && styles.roleOwner]}>{ROLE_LABEL[item.role]}</Text>
+                  <Text style={[styles.roleBadge, item.role === "owner" && styles.roleOwner]}>{ROLE_LABEL[item.role]}{(item.status ?? "accepted") === "pending" ? " · 대기" : ""}</Text>
                 </View>
               )}
             />

@@ -25,6 +25,8 @@ async def init_db():
         # SQLite ALTER TABLE — 신규 컬럼이 없으면 추가 (멱등)
         for sql in [
             "ALTER TABLE place_review_cache ADD COLUMN photo_refs TEXT DEFAULT ''",
+            "ALTER TABLE trip_members ADD COLUMN status VARCHAR(16) DEFAULT 'accepted'",
+            "ALTER TABLE expenses ADD COLUMN split_user_ids TEXT DEFAULT ''",
         ]:
             try:
                 await conn.execute(text(sql))

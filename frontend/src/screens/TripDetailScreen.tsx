@@ -92,7 +92,7 @@ export function TripDetailScreen({ route, navigation }: Props) {
           />
         )}
         {tab === "map" && <MapTab tripId={tripId} legModes={legModes} transitChoices={transitChoices} />}
-        {tab === "budget" && <BudgetTab tripId={tripId} canEdit={canEdit} currency={trip.currency} />}
+        {tab === "budget" && <BudgetTab tripId={tripId} canEdit={canEdit} currency={trip.currency} startDate={trip.start_date} endDate={trip.end_date} />}
         {tab === "checklist" && <ChecklistTab tripId={tripId} canEdit={canEdit} />}
       </View>
 

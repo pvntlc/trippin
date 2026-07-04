@@ -137,11 +137,14 @@ export type Expense = {
   currency: string;
   category: string;
   paid_by: number | null;
+  split_user_ids?: number[];   // 분담 참여자 (빈 값 = 낸 사람 혼자)
 };
 
 export type ExpenseSummary = {
   by_currency: Record<string, number>;
   by_category: Record<string, number>;
+  balances?: Record<string, { user_id: number; name: string; net: number }[]>;
+  settlements?: { from_id: number; from: string; to_id: number; to: string; amount: number; currency: string }[];
 };
 
 export type ChecklistItem = {
@@ -155,6 +158,18 @@ export type ChecklistItem = {
 export type Member = {
   user: { id: number; email: string; name: string };
   role: "owner" | "editor" | "viewer";
+  status?: "pending" | "accepted";
+};
+
+export type TripInvite = {
+  member_id: number;
+  trip_id: number;
+  title: string;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  role: string;
+  invited_by: string;
 };
 
 // ── Auth ──────────────────────────────────────────────
@@ -187,6 +202,11 @@ export const tripApi = {
   update: (id: number, data: Partial<Trip>) =>
     request<Trip>(`/trips/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (id: number) => request<void>(`/trips/${id}`, { method: "DELETE" }),
+  invites: () => request<TripInvite[]>("/trips/invites"),
+  acceptInvite: (memberId: number) =>
+    request<{ ok: boolean; trip_id: number }>(`/trips/invites/${memberId}/accept`, { method: "POST" }),
+  declineInvite: (memberId: number) =>
+    request<{ ok: boolean }>(`/trips/invites/${memberId}/decline`, { method: "POST" }),
 };
 
 // ── Places ────────────────────────────────────────────
@@ -206,6 +226,8 @@ export const expenseApi = {
   summary: (tripId: number) => request<ExpenseSummary>(`/trips/${tripId}/expenses/summary`),
   add: (tripId: number, data: Partial<Expense>) =>
     request<Expense>(`/trips/${tripId}/expenses`, { method: "POST", body: JSON.stringify(data) }),
+  update: (tripId: number, id: number, data: Partial<Expense>) =>
+    request<Expense>(`/trips/${tripId}/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (tripId: number, id: number) =>
     request<void>(`/trips/${tripId}/expenses/${id}`, { method: "DELETE" }),
 };

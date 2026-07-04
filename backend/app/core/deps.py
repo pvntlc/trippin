@@ -36,7 +36,8 @@ async def get_trip_for_member(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "여행을 찾을 수 없음")
     member = await db.scalar(
         select(TripMember).where(
-            TripMember.trip_id == trip_id, TripMember.user_id == user.id
+            TripMember.trip_id == trip_id, TripMember.user_id == user.id,
+            TripMember.status == "accepted",
         )
     )
     if member is None:
@@ -55,7 +56,8 @@ async def require_trip_editor(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "여행을 찾을 수 없음")
     member = await db.scalar(
         select(TripMember).where(
-            TripMember.trip_id == trip_id, TripMember.user_id == user.id
+            TripMember.trip_id == trip_id, TripMember.user_id == user.id,
+            TripMember.status == "accepted",
         )
     )
     if member is None:
