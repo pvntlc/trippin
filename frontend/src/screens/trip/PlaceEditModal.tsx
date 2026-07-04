@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Linking } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { placeApi, type Place } from "../../services/api";
@@ -72,6 +72,16 @@ export function PlaceEditModal({
 
           <ScrollView keyboardShouldPersistTaps="handled">
             {!!place?.address && <Text style={styles.addr}>{place.address}</Text>}
+            {!!place && (place.google_place_id || place.lat != null) && (
+              <TouchableOpacity style={styles.gmapBtn} onPress={() => {
+                const url = place.google_place_id
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${encodeURIComponent(place.google_place_id)}`
+                  : `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+                Linking.openURL(url).catch(() => {});
+              }}>
+                <Text style={styles.gmapText}>🗺  구글맵에서 보기</Text>
+              </TouchableOpacity>
+            )}
             <PlaceDetailInfo googlePlaceId={place?.google_place_id ?? null} />
 
             <Text style={styles.label}>시간</Text>
@@ -131,6 +141,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", color: Colors.text, flex: 1, marginRight: 12 },
   close: { color: Colors.textMuted, fontSize: 14 },
   addr: { fontSize: 12.5, color: Colors.textMuted, marginBottom: 10 },
+  gmapBtn: { backgroundColor: Colors.bgCard, borderRadius: 10, borderWidth: 1, borderColor: Colors.accent, paddingVertical: 10, alignItems: "center", marginBottom: 10 },
+  gmapText: { color: Colors.accentDeep, fontSize: 13.5, fontWeight: "700" },
   label: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 16, marginBottom: 8 },
   input: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.text },
   noteInput: { minHeight: 72, textAlignVertical: "top" },

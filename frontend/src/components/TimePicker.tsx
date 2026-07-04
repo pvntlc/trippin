@@ -21,15 +21,21 @@ function pad(n: number) {
 function Wheel({ values, index, onIndex }: { values: number[]; index: number; onIndex: (i: number) => void }) {
   const ref = useRef<ScrollView | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 프로그램적 스크롤(장소 바뀔 때 위치 맞춤)은 값 커밋 금지 → '직전 시간으로 바뀜' 버그 방지
+  const programmatic = useRef(true);
 
   useEffect(() => {
+    programmatic.current = true;
     ref.current?.scrollTo({ y: index * ITEM_H, animated: false });
+    const t = setTimeout(() => { programmatic.current = false; }, 180);
+    return () => clearTimeout(t);
   }, [index]);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = e.nativeEvent.contentOffset.y;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      if (programmatic.current) return;   // 사용자 스크롤이 아니면 무시
       let i = Math.round(y / ITEM_H);
       i = Math.max(0, Math.min(values.length - 1, i));
       ref.current?.scrollTo({ y: i * ITEM_H, animated: true });
