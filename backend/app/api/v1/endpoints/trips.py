@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_trip_for_member, require_trip_editor
 from app.models.user import User
-from app.models.trip import Trip, TripMember
+from app.models.trip import Trip, TripMember, Place
 from app.schemas.trip import TripCreate, TripUpdate, TripOut, MemberOut, InviteRequest
 from app.schemas.auth import UserOut
 
@@ -132,6 +133,36 @@ async def delete_trip(trip: Trip = Depends(get_trip_for_member), user: User = De
 
 
 # ── 멤버/공유 ──────────────────────────────────────────────
+@router.get("/{trip_id}/weather")
+async def trip_weather_endpoint(trip: Trip = Depends(get_trip_for_member), db: AsyncSession = Depends(get_db)):
+    """여행 날짜별 날씨. 날짜별 대표 좌표(그 날 첫 장소)로 조회 → 도쿄/후지산 등 위치별로 다르게."""
+    from app.services.weather import trip_weather
+
+    rows = await db.execute(select(Place).where(Place.trip_id == trip.id))
+    places = rows.scalars().all()
+    # 날짜별 대표 좌표 (그 날 가장 이른 장소), 없으면 전체 첫 좌표로 폴백
+    by_day: dict[int, tuple[float, float]] = {}
+    fallback = None
+    for p in sorted(places, key=lambda x: (x.planned_time or "99", x.order_index)):
+        if p.lat is None or p.lng is None:
+            continue
+        if fallback is None:
+            fallback = (p.lat, p.lng)
+        if p.day_index is not None and p.day_index not in by_day:
+            by_day[p.day_index] = (p.lat, p.lng)
+    if fallback is None:
+        return {"days": [], "note": "좌표가 있는 장소가 없어 날씨를 표시할 수 없어요."}
+
+    ndays = (trip.end_date - trip.start_date).days + 1
+    points = []
+    for i in range(max(1, ndays)):
+        d = (trip.start_date + timedelta(days=i)).isoformat()
+        lat, lng = by_day.get(i, fallback)
+        points.append((d, lat, lng))
+    today = datetime.now(timezone.utc).date()
+    return {"days": await trip_weather(points, today)}
+
+
 @router.get("/{trip_id}/members", response_model=list[MemberOut])
 async def list_members(trip: Trip = Depends(get_trip_for_member), db: AsyncSession = Depends(get_db)):
     rows = await db.execute(

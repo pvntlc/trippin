@@ -163,6 +163,16 @@ export type Member = {
   status?: "pending" | "accepted";
 };
 
+export type WeatherDay = {
+  date: string;
+  emoji: string;
+  desc: string;
+  tmax: number | null;
+  tmin: number | null;
+  precip: number | null;   // 예보=강수확률%, 평년=강수량mm
+  historical: boolean;     // true면 예보 범위 밖 → 작년 동기 참고값
+};
+
 export type TripInvite = {
   member_id: number;
   trip_id: number;
@@ -209,6 +219,7 @@ export const tripApi = {
   update: (id: number, data: Partial<Trip>) =>
     request<Trip>(`/trips/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (id: number) => request<void>(`/trips/${id}`, { method: "DELETE" }),
+  weather: (id: number) => request<{ days: WeatherDay[]; note?: string }>(`/trips/${id}/weather`),
   invites: () => request<TripInvite[]>("/trips/invites"),
   acceptInvite: (memberId: number) =>
     request<{ ok: boolean; trip_id: number }>(`/trips/invites/${memberId}/accept`, { method: "POST" }),

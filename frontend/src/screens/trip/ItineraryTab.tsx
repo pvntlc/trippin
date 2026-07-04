@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
+import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { placeApi, type Place, type Trip, type TransitOption } from "../../services/api";
+import { placeApi, tripApi, type Place, type Trip, type TransitOption } from "../../services/api";
 import { Colors } from "../../constants/colors";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
@@ -91,6 +91,13 @@ export function ItineraryTab({
     queryKey: ["places", tripId],
     queryFn: () => placeApi.list(tripId),
   });
+  const { data: weather } = useQuery({
+    queryKey: ["weather", tripId],
+    queryFn: () => tripApi.weather(tripId),
+    staleTime: 60 * 60_000,
+  });
+  const wdays = weather?.days ?? [];
+  const wHistorical = wdays.some((w) => w.historical);
 
   // 행에서 바로 삭제 (실수 방지 2단계: ✕ → 삭제?)
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
@@ -154,6 +161,26 @@ export function ItineraryTab({
 
   return (
     <View style={styles.container}>
+      {wdays.length > 0 && (
+        <View style={styles.wxWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wxRow}>
+            {wdays.map((w, i) => (
+              <View key={w.date} style={styles.wxCard}>
+                <Text style={styles.wxDay}>Day {i + 1}</Text>
+                <Text style={styles.wxEmoji}>{w.emoji}</Text>
+                <Text style={styles.wxTemp}>
+                  {w.tmax != null ? `${w.tmax}°` : "-"}
+                  <Text style={styles.wxTempMin}> / {w.tmin != null ? `${w.tmin}°` : "-"}</Text>
+                </Text>
+                {w.precip != null && (
+                  <Text style={styles.wxRain}>{w.historical ? `☔${w.precip}mm` : `💧${w.precip}%`}</Text>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+          {wHistorical && <Text style={styles.wxNote}>* 예보 범위 밖 — 작년 동기(평년) 참고값</Text>}
+        </View>
+      )}
       <SectionList
         sections={sections}
         keyExtractor={(item) => String(item.id)}
@@ -304,6 +331,15 @@ const styles = StyleSheet.create({
   placeAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   placeNote: { fontSize: 12, color: Colors.textSub, marginTop: 4 },
   tag: { fontSize: 11, color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  wxWrap: { paddingTop: 10 },
+  wxRow: { paddingHorizontal: 16, gap: 8 },
+  wxCard: { alignItems: "center", backgroundColor: Colors.bgCard, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 8, minWidth: 66 },
+  wxDay: { fontSize: 11, color: Colors.textMuted, fontWeight: "700" },
+  wxEmoji: { fontSize: 22, marginVertical: 2 },
+  wxTemp: { fontSize: 13, fontWeight: "800", color: Colors.text },
+  wxTempMin: { fontSize: 12, fontWeight: "600", color: Colors.textMuted },
+  wxRain: { fontSize: 11, color: Colors.accentDeep, fontWeight: "700", marginTop: 1 },
+  wxNote: { fontSize: 11, color: Colors.textMuted, paddingHorizontal: 16, marginTop: 5 },
   delBtn: { paddingHorizontal: 4, paddingVertical: 2, marginLeft: 2 },
   delText: { fontSize: 16, color: Colors.textMuted, fontWeight: "700" },
   delTextConfirm: { fontSize: 13, color: Colors.danger, fontWeight: "800" },
