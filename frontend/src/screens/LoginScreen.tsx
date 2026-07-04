@@ -10,7 +10,8 @@ import { Colors } from "../constants/colors";
 // 웹에서 OAuth 팝업/리다이렉트 완료 처리
 WebBrowser.maybeCompleteAuthSession();
 
-const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_KEY || "";
+const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_KEY || ""; // REST API 키 = OAuth client_id
+const KAKAO_NATIVE_KEY = process.env.EXPO_PUBLIC_KAKAO_NATIVE_KEY || ""; // 네이티브 리다이렉트 스킴용
 const discovery = {
   authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
   tokenEndpoint: "https://kauth.kakao.com/oauth/token",
@@ -26,8 +27,12 @@ export function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // 네이티브: trippin://oauth, 웹: 현재 origin + /oauth
-  const redirectUri = makeRedirectUri({ scheme: "trippin", path: "oauth" });
+  // 웹: 현재 origin + /oauth  ·  네이티브: kakao{NATIVE_KEY}://oauth (카카오 허용 형식)
+  const redirectUri = makeRedirectUri({
+    native: KAKAO_NATIVE_KEY ? `kakao${KAKAO_NATIVE_KEY}://oauth` : undefined,
+    scheme: "trippin",
+    path: "oauth",
+  });
 
   const [request, response, promptAsync] = useAuthRequest(
     {
