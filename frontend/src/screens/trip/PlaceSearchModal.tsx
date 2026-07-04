@@ -140,7 +140,7 @@ export function PlaceSearchModal({
   const { data: summary, isFetching: summaryLoading } = useQuery({
     queryKey: ["placeSummary", open?.place.google_place_id],
     queryFn: () => mapsApi.placeSummary(open!.place.google_place_id),
-    enabled: !!open,
+    enabled: !!open?.place.google_place_id,
     staleTime: 10 * 60_000,
   });
 
@@ -155,6 +155,8 @@ export function PlaceSearchModal({
         category,
         day_index: dayIndex,
         planned_time: time.trim(),
+        // 실제 장소면 '어떤 곳인지'를 설명(note)에 자동 채움(편집 가능). 직접 입력 항목은 비움.
+        note: place.google_place_id ? placeTypeLabel(place.types) : "",
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["places", tripId] });
@@ -168,6 +170,16 @@ export function PlaceSearchModal({
   const toggle = (item: PlaceSearchResult, category: string) => {
     setTime(""); // 다른 장소 펼칠 때 시간 초기화
     setOpen((prev) => (prev?.place.google_place_id === item.google_place_id ? null : { place: item, category }));
+  };
+
+  // 장소 검색 없이 자유 텍스트 항목(예: "밥먹기", "숙소 체크인") 추가
+  const directAdd = () => {
+    setTime("");
+    setOpen((prev) =>
+      prev && prev.place.google_place_id === ""
+        ? null
+        : { place: { google_place_id: "", name: debouncedQ.trim(), address: "", lat: null, lng: null, types: [] }, category: "기타" }
+    );
   };
 
   const dayOptions: { label: string; value: number | null }[] = [
@@ -289,20 +301,24 @@ export function PlaceSearchModal({
           </View>
         )}
 
-        <TouchableOpacity style={styles.gmapBtn} onPress={() => openInGoogleMaps(item)}>
-          <Text style={styles.gmapText}>🗺  구글맵에서 자세히 보기</Text>
-        </TouchableOpacity>
+        {!!item.google_place_id && (
+          <TouchableOpacity style={styles.gmapBtn} onPress={() => openInGoogleMaps(item)}>
+            <Text style={styles.gmapText}>🗺  구글맵에서 자세히 보기</Text>
+          </TouchableOpacity>
+        )}
 
-        <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>🤖 리뷰 요약</Text>
-          {summaryLoading ? (
-            <Text style={styles.summaryLoading}>리뷰를 요약하는 중…</Text>
-          ) : summary?.review_summary ? (
-            <Text style={styles.summaryText}>{summary.review_summary}</Text>
-          ) : (
-            <Text style={styles.summaryLoading}>요약할 리뷰가 없어요.</Text>
-          )}
-        </View>
+        {!!item.google_place_id && (
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>🤖 리뷰 요약</Text>
+            {summaryLoading ? (
+              <Text style={styles.summaryLoading}>리뷰를 요약하는 중…</Text>
+            ) : summary?.review_summary ? (
+              <Text style={styles.summaryText}>{summary.review_summary}</Text>
+            ) : (
+              <Text style={styles.summaryLoading}>요약할 리뷰가 없어요.</Text>
+            )}
+          </View>
+        )}
 
         <Text style={styles.timeLabel}>시간 (선택 — 추가 시 바로 적용)</Text>
         <TimePicker value={time} onChange={setTime} />
@@ -429,6 +445,18 @@ export function PlaceSearchModal({
             </View>
           )}
 
+          {/* 장소 검색 없이 직접 입력 (예: 밥먹기, 휴식) */}
+          {isSearchMode && !!debouncedQ && (
+            <View style={styles.directWrap}>
+              <TouchableOpacity style={styles.directBtn} onPress={directAdd}>
+                <Text style={styles.directText}>
+                  ✏️  ‘{debouncedQ}’ 직접 추가 <Text style={styles.directSub}>(장소 없이)</Text>
+                </Text>
+              </TouchableOpacity>
+              {open?.place.google_place_id === "" && renderDetail(open.place, "기타")}
+            </View>
+          )}
+
           {loading ? (
             <ActivityIndicator color={Colors.accent} style={{ marginVertical: 24 }} />
           ) : (
@@ -519,6 +547,10 @@ const styles = StyleSheet.create({
   recChipText: { color: Colors.textSub, fontSize: 13, fontWeight: "600" },
   recChipTextOn: { color: Colors.white },
   empty: { textAlign: "center", color: Colors.textMuted, marginVertical: 24, paddingHorizontal: 20, lineHeight: 20 },
+  directWrap: { marginBottom: 8 },
+  directBtn: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, borderWidth: 1, borderColor: Colors.accent, borderStyle: "dashed", paddingVertical: 11, paddingHorizontal: 12 },
+  directText: { color: Colors.accentDeep, fontSize: 14, fontWeight: "700" },
+  directSub: { color: Colors.textMuted, fontSize: 12, fontWeight: "500" },
   itemWrap: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   itemWrapOpen: { backgroundColor: Colors.bgCardAlt, borderRadius: 12, marginVertical: 4, borderBottomWidth: 0 },
   resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 4 },

@@ -1,8 +1,9 @@
 // 네이티브(iOS/Android) 지도 — react-native-maps.
 // 웹에서는 PlacesMap.web.tsx 가 대신 사용됨 (Metro 가 플랫폼별로 해석).
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
+import * as Location from "expo-location";
 
 import { Colors } from "../constants/colors";
 import { mapCenter, type MapPlace, type MapRoute, type MapStation } from "./mapTypes";
@@ -17,10 +18,28 @@ export function PlacesMap({
   stations?: MapStation[];
 }) {
   const c = mapCenter(places);
+  const mapRef = useRef<MapView | null>(null);
+
+  const goToMyLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      mapRef.current?.animateToRegion(
+        { latitude: pos.coords.latitude, longitude: pos.coords.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 },
+        600
+      );
+    } catch {
+      // 위치 못 가져오면 무시
+    }
+  };
+
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
+        showsUserLocation
         initialRegion={{ latitude: c.lat, longitude: c.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
       >
         {routes.map((r) => (
@@ -58,12 +77,24 @@ export function PlacesMap({
           />
         ))}
       </MapView>
+
+      <TouchableOpacity style={styles.myLocBtn} onPress={goToMyLocation} activeOpacity={0.8}>
+        <Text style={styles.myLocIcon}>📍</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: "hidden" },
+  myLocBtn: {
+    position: "absolute", right: 14, bottom: 64,
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
+  myLocIcon: { fontSize: 20 },
   stationWrap: { alignItems: "center" },
   stationPill: {
     backgroundColor: "#ffffff",

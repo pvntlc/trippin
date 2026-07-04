@@ -190,8 +190,8 @@ export function ItineraryTab({
               </Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.placeName}>{item.name}</Text>
-                {!!item.address && <Text style={styles.placeAddr}>{item.address}</Text>}
-                {!!item.note && <Text style={styles.placeNote}>📝 {item.note}</Text>}
+                {/* 지번 주소 대신 '어떤 곳인지' 설명(note)을 작게. 탭하면 편집 가능. */}
+                {!!item.note && <Text style={styles.placeAddr}>{item.note}</Text>}
               </View>
               {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
             </TouchableOpacity>

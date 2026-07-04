@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import { useQuery, useQueries } from "@tanstack/react-query";
 
 import { placeApi, mapsApi, type Place, type TransitOption, type LatLngTuple } from "../../services/api";
@@ -133,6 +133,21 @@ export function MapTab({
           📍 {mapPlaces.length}곳{routes.length ? ` · ${routes.length}구간 경로` : ""}{stations.length ? ` · 🚉 ${stations.length}역` : ""}
         </Text>
       </View>
+
+      {/* 지도에 찍힌 핀이 어떤 장소인지 텍스트로 (하단 스트립) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.pinList}
+        contentContainerStyle={styles.pinListContent}
+      >
+        {mapPlaces.map((p) => (
+          <View key={p.id} style={styles.pinChip}>
+            <View style={[styles.pinDot, { backgroundColor: dayColor(p.day_index ?? 0) }]} />
+            <Text style={styles.pinChipText} numberOfLines={1}>{p.name}</Text>
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -143,4 +158,9 @@ const styles = StyleSheet.create({
   empty: { color: Colors.textMuted, textAlign: "center", lineHeight: 22 },
   badge: { position: "absolute", top: 12, left: 12, backgroundColor: Colors.bgCard, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border },
   badgeText: { fontSize: 13, fontWeight: "700", color: Colors.text },
+  pinList: { position: "absolute", bottom: 12, left: 0, right: 0, maxHeight: 44 },
+  pinListContent: { paddingHorizontal: 12, gap: 8, alignItems: "center" },
+  pinChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bgCard, borderRadius: 16, paddingLeft: 8, paddingRight: 12, paddingVertical: 7, borderWidth: 1, borderColor: Colors.border, maxWidth: 180 },
+  pinDot: { width: 9, height: 9, borderRadius: 5 },
+  pinChipText: { fontSize: 12.5, fontWeight: "700", color: Colors.text },
 });

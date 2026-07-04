@@ -1,7 +1,7 @@
 // 웹 지도 — @vis.gl/react-google-maps (Google Maps JavaScript API).
 // 네이티브에서는 PlacesMap.tsx(react-native-maps)가 사용됨.
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { APIProvider, Map, Marker, InfoWindow, useMap } from "@vis.gl/react-google-maps";
 
 import { Colors } from "../constants/colors";
@@ -88,6 +88,13 @@ function Stations({ stations }: { stations: MapStation[] }) {
   return null;
 }
 
+// 지도 인스턴스를 부모로 끌어올려 '내 위치' 버튼에서 쓴다.
+function MapCapture({ onReady }: { onReady: (m: any) => void }) {
+  const map = useMap();
+  useEffect(() => { if (map) onReady(map); }, [map, onReady]);
+  return null;
+}
+
 export function PlacesMap({
   places,
   routes = [],
@@ -99,6 +106,20 @@ export function PlacesMap({
 }) {
   const c = mapCenter(places);
   const [selected, setSelected] = useState<MapPlace | null>(null);
+  const [gmap, setGmap] = useState<any>(null);
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+
+  const goToMyLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const loc = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setUserLoc(loc);
+        if (gmap) { gmap.panTo(loc); gmap.setZoom(15); }
+      },
+      () => {}
+    );
+  };
 
   if (!KEY) {
     return (
@@ -120,8 +141,23 @@ export function PlacesMap({
           gestureHandling="greedy"
           disableDefaultUI={false}
         >
+          <MapCapture onReady={setGmap} />
           <Routes routes={routes} />
           <Stations stations={stations} />
+          {userLoc && (
+            <Marker
+              position={userLoc}
+              title="내 위치"
+              icon={{
+                path: (window as any).google?.maps?.SymbolPath?.CIRCLE ?? 0,
+                scale: 7,
+                fillColor: "#2563eb",
+                fillOpacity: 1,
+                strokeColor: "#ffffff",
+                strokeWeight: 2,
+              }}
+            />
+          )}
           {places.map((p) => (
             <Marker
               key={p.id}
@@ -144,12 +180,24 @@ export function PlacesMap({
           )}
         </Map>
       </APIProvider>
+
+      <TouchableOpacity style={styles.myLocBtn} onPress={goToMyLocation} activeOpacity={0.8}>
+        <Text style={styles.myLocIcon}>📍</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: "hidden" },
+  myLocBtn: {
+    position: "absolute", right: 14, bottom: 64,
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.border,
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+  myLocIcon: { fontSize: 20 },
   placeholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   placeholderText: { color: Colors.textMuted, textAlign: "center", lineHeight: 22 },
 });
