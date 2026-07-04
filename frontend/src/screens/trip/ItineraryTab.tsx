@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Modal } from "react-native";
+import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Platform, Share, Alert } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { placeApi, tripApi, expenseApi, fxApi, type Place, type Trip, type TransitOption } from "../../services/api";
@@ -176,12 +176,45 @@ export function ItineraryTab({
 
   const openSearch = (day: number | null | undefined) => { setSearchDay(day); setShowSearch(true); };
 
+  // 구글 My Maps 로 내보내기 (KML)
+  const [exporting, setExporting] = useState(false);
+  const notify = (m: string) => { if (Platform.OS === "web") { try { window.alert(m); } catch {} } else Alert.alert("구글맵 내보내기", m); };
+  const exportToMaps = async () => {
+    setExporting(true);
+    try {
+      const { filename, content, count } = await tripApi.exportKml(tripId);
+      if (count === 0) { notify("지도에 찍을 좌표가 있는 장소가 없어요."); return; }
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        const blob = new Blob([content], { type: "application/vnd.google-earth.kml+xml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+        notify(`${count}곳을 담은 지도 파일(${filename})을 내려받았어요.\n\n구글 My Maps(mymaps.google.com) → '새 지도 만들기' → '가져오기'에서 이 파일을 올리면 모든 장소가 핀으로 떠요. 구글맵 앱에서도 열립니다.`);
+      } else {
+        const lines = (places ?? []).filter((p) => p.lat != null).map((p) => `• ${p.name}`);
+        await Share.share({ title: trip.title, message: `${trip.title}\n\n${lines.join("\n")}\n\n구글 My Maps 에서 'KML 가져오기'로 지도에 저장하세요.` });
+      }
+    } catch (e: any) {
+      notify(e?.message ?? "내보내기에 실패했어요.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
   }
 
   return (
     <View style={styles.container}>
+      {(places?.length ?? 0) > 0 && (
+        <TouchableOpacity style={styles.exportBtn} onPress={exportToMaps} disabled={exporting}>
+          {exporting
+            ? <ActivityIndicator color={Colors.accentDeep} />
+            : <Text style={styles.exportText}>🗺  구글 My Maps로 내보내기</Text>}
+        </TouchableOpacity>
+      )}
       {wdays.length > 0 && (
         <View style={styles.wxWrap}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wxRow}>
@@ -386,6 +419,8 @@ const styles = StyleSheet.create({
   placeAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   placeNote: { fontSize: 12, color: Colors.textSub, marginTop: 4 },
   tag: { fontSize: 11, color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
+  exportBtn: { marginTop: 10, marginHorizontal: 16, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.accent, borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  exportText: { color: Colors.accentDeep, fontSize: 13.5, fontWeight: "700" },
   wxWrap: { paddingTop: 10 },
   wxRow: { paddingHorizontal: 16, gap: 8 },
   wxCard: { alignItems: "center", backgroundColor: Colors.bgCard, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 8, minWidth: 66 },

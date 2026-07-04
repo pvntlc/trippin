@@ -163,6 +163,45 @@ async def trip_weather_endpoint(trip: Trip = Depends(get_trip_for_member), db: A
     return {"days": await trip_weather(points, today)}
 
 
+@router.get("/{trip_id}/export/kml")
+async def export_kml(trip: Trip = Depends(get_trip_for_member), db: AsyncSession = Depends(get_db)):
+    """일정 장소들을 KML 로 내보내기 → 구글 My Maps '가져오기'로 지도에 표시.
+    좌표 없는 직접입력 항목은 제외(지도에 못 찍음)."""
+    from xml.sax.saxutils import escape
+
+    rows = await db.execute(select(Place).where(Place.trip_id == trip.id))
+    places = sorted(rows.scalars().all(), key=lambda p: ((p.day_index if p.day_index is not None else 99), p.planned_time or "99", p.order_index))
+    marks = []
+    for p in places:
+        if p.lat is None or p.lng is None:
+            continue
+        day = "가고 싶은 곳" if p.day_index is None else f"Day {p.day_index + 1}"
+        bits = [day]
+        if p.planned_time:
+            bits.append(p.planned_time)
+        if p.category:
+            bits.append(p.category)
+        if p.note:
+            bits.append(p.note)
+        desc = " · ".join(bits)
+        marks.append(
+            "<Placemark>"
+            f"<name>{escape(p.name or '')}</name>"
+            f"<description>{escape(desc)}</description>"
+            f"<Point><coordinates>{p.lng},{p.lat},0</coordinates></Point>"
+            "</Placemark>"
+        )
+    kml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+        f"<name>{escape(trip.title or '여행')}</name>"
+        + "".join(marks) +
+        "</Document></kml>"
+    )
+    safe = "".join(ch for ch in (trip.title or "trip") if ch.isalnum() or ch in " _-")[:40].strip() or "trip"
+    return {"filename": f"{safe}.kml", "content": kml, "count": len(marks)}
+
+
 @router.get("/{trip_id}/members", response_model=list[MemberOut])
 async def list_members(trip: Trip = Depends(get_trip_for_member), db: AsyncSession = Depends(get_db)):
     rows = await db.execute(

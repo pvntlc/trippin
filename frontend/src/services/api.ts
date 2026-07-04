@@ -220,6 +220,7 @@ export const tripApi = {
     request<Trip>(`/trips/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (id: number) => request<void>(`/trips/${id}`, { method: "DELETE" }),
   weather: (id: number) => request<{ days: WeatherDay[]; note?: string }>(`/trips/${id}/weather`),
+  exportKml: (id: number) => request<{ filename: string; content: string; count: number }>(`/trips/${id}/export/kml`),
   invites: () => request<TripInvite[]>("/trips/invites"),
   acceptInvite: (memberId: number) =>
     request<{ ok: boolean; trip_id: number }>(`/trips/invites/${memberId}/accept`, { method: "POST" }),
