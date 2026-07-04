@@ -208,6 +208,7 @@ export function ItineraryTab({
       <PlaceSearchModal
         tripId={tripId}
         destination={trip.destination}
+        cities={trip.cities}
         dayCount={dayCount}
         defaultDay={searchDay}
         visible={showSearch}

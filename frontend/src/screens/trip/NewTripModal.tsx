@@ -33,7 +33,7 @@ export function NewTripModal({
   const qc = useQueryClient();
   const isEdit = !!editTrip;
   const [title, setTitle] = useState("");
-  const [destination, setDestination] = useState("");
+  const [cities, setCities] = useState<string[]>([]);
   const [destQuery, setDestQuery] = useState("");
   const [suggestions, setSuggestions] = useState<PlaceSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -43,7 +43,7 @@ export function NewTripModal({
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
-    setTitle(""); setDestination(""); setDestQuery(""); setSuggestions([]);
+    setTitle(""); setCities([]); setDestQuery(""); setSuggestions([]);
     setStart(""); setEnd(""); setCurrency("USD"); setError(null);
   };
 
@@ -51,8 +51,11 @@ export function NewTripModal({
   useEffect(() => {
     if (visible && editTrip) {
       setTitle(editTrip.title);
-      setDestination(editTrip.destination);
-      setDestQuery(editTrip.destination);
+      const cs = editTrip.cities && editTrip.cities.length
+        ? editTrip.cities
+        : (editTrip.destination ? [editTrip.destination] : []);
+      setCities(cs);
+      setDestQuery("");
       setStart(editTrip.start_date);
       setEnd(editTrip.end_date);
       setCurrency(editTrip.currency);
@@ -61,10 +64,10 @@ export function NewTripModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, editTrip?.id]);
 
-  // 목적지 자동완성 (디바운스)
+  // 도시 자동완성 (디바운스)
   useEffect(() => {
     const q = destQuery.trim();
-    if (q.length < 2 || q === destination) { setSuggestions([]); return; }
+    if (q.length < 2) { setSuggestions([]); return; }
     let alive = true;
     setSearching(true);
     const t = setTimeout(async () => {
@@ -78,11 +81,16 @@ export function NewTripModal({
       }
     }, 400);
     return () => { alive = false; clearTimeout(t); };
-  }, [destQuery, destination]);
+  }, [destQuery]);
 
   const createMut = useMutation({
     mutationFn: () => {
-      const data = { title: title.trim(), destination: destination.trim(), start_date: start, end_date: end, currency };
+      const data = {
+        title: title.trim(),
+        destination: cities[0] ?? "",
+        cities,
+        start_date: start, end_date: end, currency,
+      };
       return isEdit ? tripApi.update(editTrip!.id, data) : tripApi.create(data);
     },
     onSuccess: () => {
@@ -123,12 +131,15 @@ export function NewTripModal({
     setError(null);
   };
 
-  const pickSuggestion = (s: PlaceSearchResult) => {
-    setDestination(s.name);
-    setDestQuery(s.name);
+  const addCity = (name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    setCities((prev) => (prev.includes(n) ? prev : [...prev, n]));
+    setDestQuery("");
     setSuggestions([]);
-    if (!title.trim()) setTitle(`${s.name} 여행`);
+    if (!title.trim() && cities.length === 0) setTitle(`${n} 여행`);
   };
+  const removeCity = (name: string) => setCities((prev) => prev.filter((c) => c !== name));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -143,21 +154,38 @@ export function NewTripModal({
             <Text style={styles.label}>여행 이름</Text>
             <TextInput style={styles.input} placeholder="예: 도쿄 4박 5일" value={title} onChangeText={setTitle} placeholderTextColor={Colors.textMuted} />
 
-            <Text style={styles.label}>목적지</Text>
+            <Text style={styles.label}>여행 도시 (여러 곳 추가 가능)</Text>
+            {cities.length > 0 && (
+              <View style={styles.cityChips}>
+                {cities.map((c, i) => (
+                  <View key={c} style={[styles.cityChip, i === 0 && styles.cityChipMain]}>
+                    <Text style={[styles.cityChipText, i === 0 && styles.cityChipTextMain]}>
+                      {i === 0 ? "★ " : ""}{c}
+                    </Text>
+                    <TouchableOpacity onPress={() => removeCity(c)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
+                      <Text style={[styles.cityChipX, i === 0 && styles.cityChipTextMain]}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
             <TextInput
               style={styles.input}
-              placeholder="도시·지역 검색 (예: 도쿄, 오사카, 파리)"
+              placeholder="도시 검색해서 추가 (예: 오사카, 교토, 나라)"
               value={destQuery}
-              onChangeText={(t) => { setDestQuery(t); setDestination(""); }}
+              onChangeText={setDestQuery}
+              onSubmitEditing={() => addCity(destQuery)}
+              returnKeyType="done"
               placeholderTextColor={Colors.textMuted}
             />
             {searching && <Text style={styles.searching}>검색 중…</Text>}
             {suggestions.map((s) => (
-              <TouchableOpacity key={s.google_place_id} style={styles.suggestion} onPress={() => pickSuggestion(s)}>
-                <Text style={styles.sugName}>{s.name}</Text>
+              <TouchableOpacity key={s.google_place_id} style={styles.suggestion} onPress={() => addCity(s.name)}>
+                <Text style={styles.sugName}>＋ {s.name}</Text>
                 <Text style={styles.sugAddr} numberOfLines={1}>{s.address}</Text>
               </TouchableOpacity>
             ))}
+            {cities.length > 0 && <Text style={styles.cityHint}>★ 첫 도시가 대표 도시예요. 여행 중 방문할 도시를 다 넣어보세요.</Text>}
 
             <Text style={styles.label}>날짜 {start ? `· ${start}${end ? ` ~ ${end}` : " ~ (종료일 선택)"}` : ""}</Text>
             <Calendar
@@ -203,6 +231,13 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, color: Colors.textSub, fontWeight: "600", marginTop: 16, marginBottom: 8 },
   input: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.text },
   searching: { color: Colors.textMuted, fontSize: 12, marginTop: 6 },
+  cityChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  cityChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bgCardAlt, borderRadius: 18, paddingLeft: 12, paddingRight: 10, paddingVertical: 7 },
+  cityChipMain: { backgroundColor: Colors.accent },
+  cityChipText: { color: Colors.textSub, fontSize: 13, fontWeight: "600" },
+  cityChipTextMain: { color: Colors.white },
+  cityChipX: { color: Colors.textMuted, fontSize: 12, fontWeight: "700" },
+  cityHint: { color: Colors.textMuted, fontSize: 11.5, marginTop: 8, lineHeight: 16 },
   suggestion: { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
   sugName: { fontSize: 15, fontWeight: "600", color: Colors.text },
   sugAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },

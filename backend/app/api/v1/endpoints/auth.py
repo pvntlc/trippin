@@ -10,7 +10,7 @@ from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.core.security import verify_password, create_access_token
 from app.models.user import User
-from app.schemas.auth import KakaoLoginRequest, TokenResponse, UserOut
+from app.schemas.auth import KakaoLoginRequest, TokenResponse, UserOut, UserUpdate
 
 router = APIRouter()
 
@@ -100,4 +100,21 @@ async def kakao_login(request: Request, body: KakaoLoginRequest, db: AsyncSessio
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)):
+    return user
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_me(
+    body: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """닉네임 변경."""
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "닉네임을 입력해 주세요")
+        user.name = name[:100]
+    await db.commit()
+    await db.refresh(user)
     return user

@@ -89,6 +89,7 @@ export type Trip = {
   owner_id: number;
   title: string;
   destination: string;
+  cities?: string[];
   start_date: string;
   end_date: string;
   currency: string;
@@ -191,6 +192,11 @@ export const authApi = {
     return res.json() as Promise<{ access_token: string }>;
   },
   me: () => request<{ id: number; email: string; name: string }>("/auth/me"),
+  updateMe: (name: string) =>
+    request<{ id: number; email: string; name: string }>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
 };
 
 // ── Trips ─────────────────────────────────────────────

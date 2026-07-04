@@ -18,6 +18,8 @@ class Trip(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     destination: Mapped[str] = mapped_column(String(200), default="")
+    # 방문 도시 목록(JSON 문자열). 비면 destination 1개로 간주. 첫 번째가 대표 도시.
+    cities: Mapped[str] = mapped_column(Text, default="")
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
     # 통화 코드 (예산 표시 기본값). 예: "USD", "JPY", "KRW"

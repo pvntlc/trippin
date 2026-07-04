@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +84,12 @@ async def list_trips(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 async def create_trip(body: TripCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     if body.end_date < body.start_date:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "종료일이 시작일보다 빠를 수 없음")
-    trip = Trip(owner_id=user.id, **body.model_dump())
+    data = body.model_dump()
+    cities = [c.strip() for c in (data.pop("cities", None) or []) if c and c.strip()]
+    # 대표 도시(destination)가 비어있으면 첫 도시로 자동 채움
+    if cities and not data.get("destination"):
+        data["destination"] = cities[0]
+    trip = Trip(cities=json.dumps(cities, ensure_ascii=False), owner_id=user.id, **data)
     db.add(trip)
     await db.flush()
     db.add(TripMember(trip_id=trip.id, user_id=user.id, role="owner"))
@@ -102,7 +109,14 @@ async def get_trip(trip: Trip = Depends(get_trip_for_member), user: User = Depen
 
 @router.patch("/{trip_id}", response_model=TripOut)
 async def update_trip(body: TripUpdate, trip: Trip = Depends(require_trip_editor), db: AsyncSession = Depends(get_db)):
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "cities" in data:
+        cities = [c.strip() for c in (data.pop("cities") or []) if c and c.strip()]
+        trip.cities = json.dumps(cities, ensure_ascii=False)
+        # 대표 도시 동기화(명시적 destination 이 함께 오지 않은 경우)
+        if cities and "destination" not in data:
+            trip.destination = cities[0]
+    for field, value in data.items():
         setattr(trip, field, value)
     await db.commit()
     await db.refresh(trip)

@@ -45,6 +45,7 @@ function kmText(km: number): string {
 export function PlaceSearchModal({
   tripId,
   destination,
+  cities,
   dayCount,
   defaultDay,
   visible,
@@ -52,6 +53,7 @@ export function PlaceSearchModal({
 }: {
   tripId: number;
   destination: string;
+  cities?: string[];
   dayCount: number;
   defaultDay?: number | null;  // 지정 시 그 날에 바로 추가 버튼 노출
   visible: boolean;
@@ -61,6 +63,16 @@ export function PlaceSearchModal({
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState(""); // 타이핑 멈추면 자동 검색
   const [recCat, setRecCat] = useState(0);
+
+  // 여행 도시 목록(다중). 없으면 기존 destination 1개.
+  const cityList = cities && cities.length ? cities : (destination ? [destination] : []);
+  const [selectedCity, setSelectedCity] = useState<string>(cityList[0] ?? "");
+  // 도시 목록이 바뀌면(다른 여행 열기 등) 선택 보정
+  useEffect(() => {
+    setSelectedCity((prev) => (cityList.includes(prev) ? prev : cityList[0] ?? ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cities, destination]);
+  const city = selectedCity;
   // 펼쳐진(선택된) 장소
   const [open, setOpen] = useState<{ place: PlaceSearchResult; category: string } | null>(null);
   const [time, setTime] = useState(""); // 추가 시 바로 넣는 시간(선택)
@@ -73,10 +85,10 @@ export function PlaceSearchModal({
   const cat = REC_CATS[recCat];
 
   const { data: recData, isFetching: recLoading } = useQuery({
-    queryKey: ["recommend", destination, cat.term],
-    // 목적지 좌표로 결과를 바이어스(언어/국가 무관, 해외도 정상 동작)
-    queryFn: () => mapsApi.search(cat.term, destination),
-    enabled: visible && !isSearchMode && !!destination,
+    queryKey: ["recommend", city, cat.term],
+    // 선택한 도시 좌표로 결과를 바이어스(언어/국가 무관, 해외도 정상 동작)
+    queryFn: () => mapsApi.search(cat.term, city),
+    enabled: visible && !isSearchMode && !!city,
     staleTime: 5 * 60_000,
   });
 
@@ -89,8 +101,8 @@ export function PlaceSearchModal({
 
   // 1차: TextSearch + 위치바이어스 — 카테고리어("공원")·해외도 현지 결과가 잘 나옴
   const { data: textData, isFetching: textLoading } = useQuery({
-    queryKey: ["search", debouncedQ, destination],
-    queryFn: () => mapsApi.search(debouncedQ, destination || undefined),
+    queryKey: ["search", debouncedQ, city],
+    queryFn: () => mapsApi.search(debouncedQ, city || undefined),
     enabled: visible && debouncedQ.length >= 1,
     staleTime: 60_000,
   });
@@ -99,8 +111,8 @@ export function PlaceSearchModal({
   // 2차(폴백): 1차가 0건이면 자동완성 — 부분어/오타("스타")에 강함
   const needAC = visible && !!debouncedQ && !textLoading && textResults.length === 0;
   const { data: acData, isFetching: acLoading } = useQuery({
-    queryKey: ["autocomplete", debouncedQ, destination],
-    queryFn: () => mapsApi.autocomplete(debouncedQ, destination || undefined),
+    queryKey: ["autocomplete", debouncedQ, city],
+    queryFn: () => mapsApi.autocomplete(debouncedQ, city || undefined),
     enabled: needAC,
     staleTime: 60_000,
   });
@@ -194,17 +206,23 @@ export function PlaceSearchModal({
     : sortMode === "pick" ? (() => { const p = coordPlaces.find((x) => x.id === pickId); return p ? { lat: p.lat as number, lng: p.lng as number } : null; })()
     : null;
 
-  // 추천(카테고리) 결과: 행정구역 제외 + 거리순 정렬. 검색은 자동완성 예측을 그대로.
-  let recList = (recData?.results ?? []).filter(isRealPlace);
-  if (refCoord) {
-    recList = [...recList].sort((a, b) => {
+  // 좌표 기준 거리순 정렬 헬퍼
+  const sortByRef = (arr: PlaceSearchResult[]): PlaceSearchResult[] => {
+    if (!refCoord) return arr;
+    return [...arr].sort((a, b) => {
       const da = a.lat != null && a.lng != null ? haversineKm(refCoord, { lat: a.lat, lng: a.lng }) : Infinity;
       const db = b.lat != null && b.lng != null ? haversineKm(refCoord, { lat: b.lat, lng: b.lng }) : Infinity;
       return da - db;
     });
-  }
+  };
+  // 추천(카테고리) 결과 + 이름검색 결과 모두 행정구역 제외 + (선택 시) 거리순 정렬.
+  const recList = sortByRef((recData?.results ?? []).filter(isRealPlace));
+  const searchList = sortByRef(textResults);
+  // 좌표 있는 결과가 있어 거리순 UI 를 띄울 수 있는지 (자동완성 예측은 좌표 없어 제외)
+  const showSort = isSearchMode ? (!showPredictions && searchList.length > 0) : recList.length > 0;
+
   const list: (PlaceSearchResult | Prediction)[] = isSearchMode
-    ? (showPredictions ? predictions : textResults)
+    ? (showPredictions ? predictions : searchList)
     : recList;
   const loading = isSearchMode ? searchLoading : recLoading;
 
@@ -277,10 +295,25 @@ export function PlaceSearchModal({
         <View style={styles.card}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>
-              {isSearchMode ? "장소 검색" : destination ? `📍 ${destination} 추천` : "장소 검색"}
+              {isSearchMode ? "장소 검색" : city ? `📍 ${city} 추천` : "장소 검색"}
             </Text>
             <TouchableOpacity onPress={() => { reset(); onClose(); }}><Text style={styles.close}>닫기</Text></TouchableOpacity>
           </View>
+
+          {/* 여행 도시 여러 개면 칩으로 선택 → 그 도시 기준으로 추천/검색 */}
+          {cityList.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cityChips}>
+              {cityList.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.cityChip, selectedCity === c && styles.cityChipOn]}
+                  onPress={() => { setSelectedCity(c); setOpen(null); }}
+                >
+                  <Text style={[styles.cityChipText, selectedCity === c && styles.cityChipTextOn]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
           <View style={styles.searchRow}>
             <TextInput
@@ -303,7 +336,7 @@ export function PlaceSearchModal({
             )}
           </View>
 
-          {!isSearchMode && !!destination && (
+          {!isSearchMode && !!city && (
             <View style={styles.recChips}>
               {REC_CATS.map((c, i) => (
                 <TouchableOpacity key={c.label} style={[styles.recChip, recCat === i && styles.recChipOn]} onPress={() => { setRecCat(i); setOpen(null); }}>
@@ -313,7 +346,7 @@ export function PlaceSearchModal({
             </View>
           )}
 
-          {!isSearchMode && recList.length > 0 && (
+          {showSort && (
             <View>
               <View style={styles.sortRow}>
                 <Text style={styles.sortLabel}>거리순</Text>
@@ -361,7 +394,7 @@ export function PlaceSearchModal({
                 <Text style={styles.empty}>
                   {isSearchMode
                     ? (debouncedQ ? "결과가 없어요." : "")
-                    : (destination ? "추천 결과가 없어요." : "목적지를 설정하면 추천이 떠요. 위에서 검색해 보세요.")}
+                    : (city ? "추천 결과가 없어요." : "도시를 설정하면 추천이 떠요. 위에서 검색해 보세요.")}
                 </Text>
               }
               renderItem={({ item }) => {
@@ -429,6 +462,11 @@ const styles = StyleSheet.create({
   searchBtn: { backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 18, justifyContent: "center", minWidth: 64, alignItems: "center" },
   btnOff: { opacity: 0.4 },
   searchBtnText: { color: Colors.white, fontWeight: "700" },
+  cityChips: { gap: 8, paddingBottom: 12 },
+  cityChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: Colors.bgCardAlt, borderWidth: 1, borderColor: Colors.border },
+  cityChipOn: { backgroundColor: Colors.accentDeep, borderColor: Colors.accentDeep },
+  cityChipText: { color: Colors.textSub, fontSize: 13, fontWeight: "700" },
+  cityChipTextOn: { color: Colors.white },
   recChips: { flexDirection: "row", gap: 8, marginBottom: 12 },
   recChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: Colors.bgCardAlt },
   recChipOn: { backgroundColor: Colors.accent },

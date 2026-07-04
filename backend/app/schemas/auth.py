@@ -18,3 +18,8 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    # 닉네임 변경
+    name: str | None = Field(default=None, min_length=1, max_length=100)

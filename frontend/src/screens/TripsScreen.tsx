@@ -5,16 +5,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { tripApi, type Trip, type TripInvite } from "../services/api";
-import { useAuth } from "../store/auth";
 import { Colors } from "../constants/colors";
 import { NewTripModal } from "./trip/NewTripModal";
+import { ProfileModal } from "./ProfileModal";
 import type { RootStackParamList } from "../../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Trips">;
 
 export function TripsScreen({ navigation }: Props) {
-  const { logout } = useAuth();
   const [showNew, setShowNew] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const qc = useQueryClient();
   const { data: trips, isLoading } = useQuery({ queryKey: ["trips"], queryFn: tripApi.list });
@@ -33,7 +33,9 @@ export function TripsScreen({ navigation }: Props) {
     >
       <Text style={styles.cardTitle}>{item.title}</Text>
       <Text style={styles.cardSub}>
-        {item.destination || "목적지 미정"} · {item.start_date} ~ {item.end_date}
+        {(item.cities && item.cities.length > 1
+          ? `${item.cities[0]} 외 ${item.cities.length - 1}곳`
+          : item.destination || "목적지 미정")} · {item.start_date} ~ {item.end_date}
       </Text>
       <Text style={styles.cardRole}>{item.my_role === "owner" ? "내 여행" : "공유받음"}</Text>
     </TouchableOpacity>
@@ -43,8 +45,8 @@ export function TripsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>내 여행</Text>
-        <TouchableOpacity onPress={logout}>
-          <Text style={styles.logout}>로그아웃</Text>
+        <TouchableOpacity onPress={() => setShowProfile(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.profileBtn}>⚙️ 프로필</Text>
         </TouchableOpacity>
       </View>
 
@@ -81,6 +83,7 @@ export function TripsScreen({ navigation }: Props) {
       </TouchableOpacity>
 
       <NewTripModal visible={showNew} onClose={() => setShowNew(false)} />
+      <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
     </SafeAreaView>
   );
 }
@@ -89,7 +92,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, paddingTop: 8 },
   headerTitle: { fontSize: 24, fontWeight: "800", color: Colors.text },
-  logout: { color: Colors.textMuted, fontSize: 14 },
+  profileBtn: { color: Colors.textSub, fontSize: 14, fontWeight: "600" },
   inviteCard: { backgroundColor: Colors.bgCard, borderRadius: 14, padding: 14, marginHorizontal: 16, marginBottom: 4, borderWidth: 1.5, borderColor: Colors.accent },
   inviteTitle: { fontSize: 15, fontWeight: "800", color: Colors.text },
   inviteSub: { fontSize: 13, color: Colors.textSub, marginTop: 3 },
