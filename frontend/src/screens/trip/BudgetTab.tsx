@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator, Modal, Alert, Platform } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
 
 import { expenseApi, memberApi, placeApi, authApi, type Expense } from "../../services/api";
 import { Colors } from "../../constants/colors";
@@ -81,6 +82,37 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
     setPaidBy(me?.id ?? null);
     setSplitIds(accepted.map(m => m.user.id));   // 기본 = 전원 분담
     setShow(true);
+  };
+
+  // 영수증 사진 → 지출 자동 입력
+  const [scanning, setScanning] = useState(false);
+  const notify = (msg: string) => {
+    if (Platform.OS === "web") { try { window.alert(msg); } catch {} }
+    else Alert.alert("영수증 스캔", msg);
+  };
+  const scanReceipt = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.5,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.[0]?.base64) return;
+      const asset = res.assets[0];
+      setScanning(true);
+      const parsed = await expenseApi.parseReceipt(tripId, asset.base64!, asset.mimeType || "image/jpeg");
+      if (parsed.title) setTitle(parsed.title);
+      if (parsed.amount) setAmount(String(parsed.amount));
+      if (parsed.category && CATEGORIES.includes(parsed.category)) setCategory(parsed.category);
+      openAdd();
+      if (parsed.currency && parsed.currency !== currency) {
+        notify(`영수증 통화(${parsed.currency})가 여행 통화(${currency})와 달라요. 금액을 확인해 주세요.`);
+      }
+    } catch (e: any) {
+      notify(e?.message ?? "영수증을 읽지 못했어요. 직접 입력해 주세요.");
+    } finally {
+      setScanning(false);
+    }
   };
 
   const addMut = useMutation({
@@ -181,9 +213,18 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
       />
 
       {canEdit && (
-        <TouchableOpacity style={styles.fab} onPress={openAdd}>
-          <Text style={styles.fabText}>+ 지출 추가</Text>
-        </TouchableOpacity>
+        <View style={styles.btnRow}>
+          <TouchableOpacity style={styles.scanBtn} onPress={scanReceipt} disabled={scanning}>
+            {scanning ? (
+              <ActivityIndicator color={Colors.accentDeep} />
+            ) : (
+              <Text style={styles.scanText}>📷 영수증 스캔</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.fab, { flex: 1 }]} onPress={openAdd}>
+            <Text style={styles.fabText}>+ 지출 추가</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <Modal visible={show} transparent animationType="slide">
@@ -270,6 +311,9 @@ const styles = StyleSheet.create({
   delete: { color: Colors.textMuted, fontSize: 16, paddingLeft: 6 },
   fab: { backgroundColor: Colors.accent, borderRadius: 12, paddingVertical: 15, alignItems: "center" },
   fabText: { color: Colors.white, fontSize: 16, fontWeight: "700" },
+  btnRow: { flexDirection: "row", gap: 8, alignItems: "stretch" },
+  scanBtn: { backgroundColor: Colors.bgCard, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.accent },
+  scanText: { color: Colors.accentDeep, fontSize: 14, fontWeight: "700" },
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   modalCard: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   modalTitle: { fontSize: 18, fontWeight: "700", color: Colors.text, marginBottom: 16 },

@@ -16,6 +16,7 @@ module.exports = ({ config }) => ({
   plugins: [
     ...(config.plugins || []),
     "expo-web-browser",
+    ["expo-image-picker", { photosPermission: "영수증 사진을 선택하려면 사진 접근 권한이 필요해요." }],
     ["expo-build-properties", { android: { usesCleartextTraffic: true } }],
   ],
 });

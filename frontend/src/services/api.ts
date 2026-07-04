@@ -236,6 +236,12 @@ export const expenseApi = {
     request<Expense>(`/trips/${tripId}/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (tripId: number, id: number) =>
     request<void>(`/trips/${tripId}/expenses/${id}`, { method: "DELETE" }),
+  // 영수증 사진(base64/data URL) → 지출 정보 자동 추출
+  parseReceipt: (tripId: number, image: string, media_type = "image/jpeg") =>
+    request<{ title: string; amount: number; currency: string; category: string }>(
+      `/trips/${tripId}/expenses/parse-receipt`,
+      { method: "POST", body: JSON.stringify({ image, media_type }) }
+    ),
 };
 
 // ── Checklist ─────────────────────────────────────────

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +12,29 @@ from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseOut
 
 router = APIRouter()
+
+
+class ReceiptParseRequest(BaseModel):
+    # data URL(data:image/...;base64,....) 또는 순수 base64
+    image: str = Field(min_length=16)
+    media_type: str = "image/jpeg"
+
+
+@router.post("/{trip_id}/expenses/parse-receipt")
+async def parse_receipt_endpoint(body: ReceiptParseRequest, trip: Trip = Depends(require_trip_editor)):
+    """영수증 사진 → 지출 정보 자동 추출(title/amount/currency/category). 프론트 폼 프리필용."""
+    from app.services.llm import parse_receipt
+
+    img, mt = body.image, body.media_type
+    if img.startswith("data:"):
+        header, _, b64 = img.partition(",")
+        img = b64
+        if ":" in header and ";" in header:
+            mt = header.split(";")[0].split(":", 1)[1] or mt
+    data = await parse_receipt(img, mt, default_currency=trip.currency)
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "영수증에서 정보를 읽지 못했어요. 직접 입력해 주세요.")
+    return data
 
 
 @router.get("/{trip_id}/expenses", response_model=list[ExpenseOut])

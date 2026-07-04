@@ -1,7 +1,11 @@
-"""Claude 기반 리뷰 요약. 저렴·빠른 Haiku 4.5 사용."""
+"""Claude 기반 리뷰 요약 + 영수증 파싱. 저렴·빠른 Haiku 4.5 사용."""
+import json
+
 import anthropic
 
 from app.core.config import settings
+
+_EXPENSE_CATS = {"식비", "교통", "숙박", "관광", "쇼핑", "기타"}
 
 CLAUDE_HAIKU = "claude-haiku-4-5-20251001"
 
@@ -57,3 +61,50 @@ async def summarize_reviews(place_name: str, reviews: list[str], types: list[str
     except Exception:
         # 요약 실패는 치명적이지 않음 — 빈 요약으로 graceful 처리
         return ""
+
+
+async def parse_receipt(image_b64: str, media_type: str, default_currency: str = "USD") -> dict:
+    """영수증 이미지에서 지출 정보(title/amount/currency/category) 추출. 실패 시 빈 dict."""
+    client = _get_client()
+    if client is None or not image_b64:
+        return {}
+    prompt = (
+        "이 영수증 사진에서 지출 정보를 추출해 JSON으로만 출력하세요.\n"
+        '형식: {"title": "가게 또는 항목명(한국어)", "amount": 총결제금액_숫자, '
+        '"currency": "통화 ISO 코드", "category": "식비|교통|숙박|관광|쇼핑|기타 중 하나"}\n'
+        "규칙:\n"
+        "- amount 는 최종 합계(total, 세금 포함). 통화기호·콤마 없이 숫자만.\n"
+        f"- 통화를 못 읽으면 {default_currency}. JPY/USD/KRW/EUR 등 ISO 코드.\n"
+        "- category 는 가게 성격으로 추정(식당·카페=식비, 택시·기차=교통, 호텔=숙박 등).\n"
+        "- 못 읽는 값은 비우거나 0. 반드시 JSON만, 다른 말 금지."
+    )
+    try:
+        msg = await client.messages.create(
+            model=CLAUDE_HAIKU,
+            max_tokens=300,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": prompt},
+            ]}],
+        )
+        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+        i, j = text.find("{"), text.rfind("}")
+        if i < 0 or j < 0:
+            return {}
+        data = json.loads(text[i:j + 1])
+        raw_amt = data.get("amount")
+        if isinstance(raw_amt, str):
+            raw_amt = raw_amt.replace(",", "").replace(" ", "").replace("¥", "").replace("$", "").replace("₩", "")
+        try:
+            amount = float(raw_amt or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        cat = str(data.get("category") or "").strip()
+        return {
+            "title": str(data.get("title") or "").strip()[:200],
+            "amount": amount,
+            "currency": str(data.get("currency") or default_currency).strip()[:8].upper(),
+            "category": cat if cat in _EXPENSE_CATS else "기타",
+        }
+    except Exception:
+        return {}
