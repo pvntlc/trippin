@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     app_port: int = 8002
 
     # Auth (JWT)
-    jwt_secret: str = "dev_only_insecure_secret_change_me"
+    # 기본값 빈 문자열 — 운영에서 JWT_SECRET 미설정 시 시작 자체를 막는다(fail-closed).
+    # 하드코딩 기본 시크릿이 있으면 그 값으로 누구나 토큰 위조 가능(인증 우회).
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 43200  # 30일
+    jwt_expire_minutes: int = 10080  # 7일 (기존 30일 → 탈취 시 노출창 축소)
 
     # Google Maps Platform (서버 전용 키)
     google_maps_api_key: str = ""

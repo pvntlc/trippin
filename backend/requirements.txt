@@ -17,6 +17,9 @@ passlib==1.7.4
 bcrypt==4.0.1          # passlib 1.7.4 는 bcrypt 5.x 와 비호환 → 4.0.1 고정
 python-multipart==0.0.20
 
+# --- Rate limiting (인증 브루트포스 방어) ---
+slowapi==0.1.9
+
 # --- HTTP client (Google Maps API 프록시) ---
 httpx==0.28.1
 

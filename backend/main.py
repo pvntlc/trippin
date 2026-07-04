@@ -5,15 +5,29 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 import uvicorn
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.limiter import limiter
 from app.api.v1.router import router as api_v1_router
+
+
+def _assert_secure_config():
+    """운영 환경에서 필수 시크릿 누락 시 시작을 막는다(fail-closed)."""
+    if settings.app_env == "production":
+        if not settings.jwt_secret or settings.jwt_secret == "dev_only_insecure_secret_change_me":
+            raise RuntimeError(
+                "JWT_SECRET 미설정/기본값 — 운영 시작 불가. GitHub Secret JWT_SECRET 확인."
+            )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _assert_secure_config()
     await init_db()
     print(f"[Startup] Trippin API [{settings.app_env}] on :{settings.app_port}")
     yield
@@ -26,6 +40,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
