@@ -1,0 +1,35 @@
+name: Migration helper
+
+on:
+  workflow_dispatch:
+
+# 구서버(OCI_HOST) → 러너 → 신서버(OCI_NEW_HOST) 로 trippin.db 를 직접 옮긴다.
+# 다운로드 가능한 아티팩트를 만들지 않음 — 사용자 소유 두 호스트 간 내부 이전.
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull db from old server to runner
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 2222
+          source: "trippin/backend/trippin.db"
+          target: "./incoming"
+          strip_components: 2
+
+      - name: Show pulled file
+        run: ls -la incoming/
+
+      - name: Push db to new server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_NEW_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_NEW_SSH_KEY }}
+          port: 2222
+          source: "incoming/trippin.db"
+          target: "/home/ubuntu/migration-incoming"
+          strip_components: 1
