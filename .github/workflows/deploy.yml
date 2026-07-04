@@ -56,18 +56,18 @@ jobs:
       - name: Upload backend .env
         uses: appleboy/scp-action@v0.1.7
         with:
-          host:     ${{ secrets.OCI_HOST }}
+          host:     ${{ secrets.OCI_NEW_HOST }}
           username: ${{ secrets.OCI_USER }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_NEW_SSH_KEY }}
           port:     2222
           source:   "backend/.env"
           target:   "/home/${{ secrets.OCI_USER }}/trippin/"
       - name: Upload frontend dist
         uses: appleboy/scp-action@v0.1.7
         with:
-          host:     ${{ secrets.OCI_HOST }}
+          host:     ${{ secrets.OCI_NEW_HOST }}
           username: ${{ secrets.OCI_USER }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_NEW_SSH_KEY }}
           port:     2222
           source:   "frontend-dist.tar.gz"
           target:   "/home/${{ secrets.OCI_USER }}/"
@@ -76,9 +76,9 @@ jobs:
       - name: Deploy and restart
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host:     ${{ secrets.OCI_HOST }}
+          host:     ${{ secrets.OCI_NEW_HOST }}
           username: ${{ secrets.OCI_USER }}
-          key:      ${{ secrets.OCI_SSH_KEY }}
+          key:      ${{ secrets.OCI_NEW_SSH_KEY }}
           port:     2222
           script: |
             set -e
