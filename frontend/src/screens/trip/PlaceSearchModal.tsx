@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal, ActivityIndicator, Image, ScrollView, Linking } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { mapsApi, placeApi, placePhotoUrl, type PlaceSearchResult, type Prediction } from "../../services/api";
@@ -206,6 +206,36 @@ export function PlaceSearchModal({
     : sortMode === "pick" ? (() => { const p = coordPlaces.find((x) => x.id === pickId); return p ? { lat: p.lat as number, lng: p.lng as number } : null; })()
     : null;
 
+  // "여기까지 얼마나 걸리는지" 기준점: 거리순으로 고른 기준, 없으면 일정의 마지막 장소.
+  const timeRef: { lat: number; lng: number } | null =
+    refCoord ?? (lastPlace ? { lat: lastPlace.lat as number, lng: lastPlace.lng as number } : null);
+  const refLabel = sortMode === "current" ? "현재 위치에서" : sortMode === "pick" ? "지정한 곳에서" : "마지막 장소에서";
+  const openCoord = open && open.place.lat != null && open.place.lng != null
+    ? { lat: open.place.lat, lng: open.place.lng } : null;
+  const canTime = !!open && !!timeRef && !!openCoord;
+  const { data: driveDir } = useQuery({
+    queryKey: ["dir", "driving", timeRef?.lat, timeRef?.lng, openCoord?.lat, openCoord?.lng],
+    queryFn: () => mapsApi.directions(`${timeRef!.lat},${timeRef!.lng}`, `${openCoord!.lat},${openCoord!.lng}`, "driving"),
+    enabled: canTime,
+    staleTime: 5 * 60_000,
+  });
+  const { data: walkDir } = useQuery({
+    queryKey: ["dir", "walking", timeRef?.lat, timeRef?.lng, openCoord?.lat, openCoord?.lng],
+    queryFn: () => mapsApi.directions(`${timeRef!.lat},${timeRef!.lng}`, `${openCoord!.lat},${openCoord!.lng}`, "walking"),
+    enabled: canTime,
+    staleTime: 5 * 60_000,
+  });
+
+  // 구글맵에서 해당 장소 상세 열기
+  const openInGoogleMaps = (place: PlaceSearchResult) => {
+    const url = place.google_place_id
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${encodeURIComponent(place.google_place_id)}`
+      : place.lat != null && place.lng != null
+        ? `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
   // 좌표 기준 거리순 정렬 헬퍼
   const sortByRef = (arr: PlaceSearchResult[]): PlaceSearchResult[] => {
     if (!refCoord) return arr;
@@ -246,6 +276,22 @@ export function PlaceSearchModal({
           </ScrollView>
         )}
         {refs.length > 1 && <Text style={styles.galleryHint}>← 사진 {refs.length}장 (밀어서 보기)</Text>}
+
+        {/* 여기까지 얼마나 걸리는지 (기준: 거리순 선택 or 마지막 장소) */}
+        {canTime && (driveDir?.duration_text || walkDir?.duration_text) && (
+          <View style={styles.travelBox}>
+            <Text style={styles.travelLabel}>{refLabel} 여기까지</Text>
+            <Text style={styles.travelText}>
+              {driveDir?.duration_text ? `🚗 ${driveDir.duration_text}` : ""}
+              {driveDir?.duration_text && walkDir?.duration_text ? "   " : ""}
+              {walkDir?.duration_text ? `🚶 ${walkDir.duration_text}` : ""}
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.gmapBtn} onPress={() => openInGoogleMaps(item)}>
+          <Text style={styles.gmapText}>🗺  구글맵에서 자세히 보기</Text>
+        </TouchableOpacity>
 
         <View style={styles.summaryBox}>
           <Text style={styles.summaryLabel}>🤖 리뷰 요약</Text>
@@ -498,6 +544,11 @@ const styles = StyleSheet.create({
   detail: { paddingHorizontal: 8, paddingBottom: 14 },
   galleryImg: { width: 220, height: 150, borderRadius: 12, backgroundColor: Colors.bgCard },
   galleryHint: { fontSize: 11, color: Colors.textMuted, marginBottom: 10 },
+  travelBox: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: Colors.bgCard, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
+  travelLabel: { fontSize: 12.5, color: Colors.textMuted, fontWeight: "600" },
+  travelText: { fontSize: 13.5, color: Colors.text, fontWeight: "700" },
+  gmapBtn: { backgroundColor: Colors.bgCard, borderRadius: 10, borderWidth: 1, borderColor: Colors.accent, paddingVertical: 11, alignItems: "center", marginBottom: 12 },
+  gmapText: { color: Colors.accentDeep, fontSize: 13.5, fontWeight: "700" },
   summaryBox: { backgroundColor: Colors.bgCard, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border },
   summaryLabel: { fontSize: 12, fontWeight: "700", color: Colors.textSub, marginBottom: 6 },
   summaryText: { fontSize: 14, color: Colors.text, lineHeight: 21 },
