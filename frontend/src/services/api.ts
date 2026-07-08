@@ -140,6 +140,8 @@ export type Expense = {
   category: string;
   paid_by: number | null;
   split_user_ids?: number[];   // 분담 참여자 (빈 값 = 낸 사람 혼자)
+  has_receipt?: boolean;       // 영수증 사진 첨부 여부 (이미지 본문은 별도 조회)
+  receipt_image?: string;      // 저장용(data URI) — 응답엔 안 옴, 생성/수정 시 전송
 };
 
 export type ExpenseSummary = {
@@ -249,6 +251,8 @@ export const expenseApi = {
     request<Expense>(`/trips/${tripId}/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   remove: (tripId: number, id: number) =>
     request<void>(`/trips/${tripId}/expenses/${id}`, { method: "DELETE" }),
+  receipt: (tripId: number, id: number) =>
+    request<{ image: string }>(`/trips/${tripId}/expenses/${id}/receipt`),
   // 영수증 사진(base64/data URL) → 지출 정보 자동 추출
   parseReceipt: (tripId: number, image: string, media_type = "image/jpeg") =>
     request<{ title: string; amount: number; currency: string; category: string }>(

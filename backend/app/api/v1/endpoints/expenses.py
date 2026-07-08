@@ -134,6 +134,15 @@ async def update_expense(expense_id: int, body: ExpenseUpdate, trip: Trip = Depe
     return expense
 
 
+@router.get("/{trip_id}/expenses/{expense_id}/receipt")
+async def get_receipt(expense_id: int, trip: Trip = Depends(get_trip_for_member), db: AsyncSession = Depends(get_db)):
+    """영수증 사진(data URI) 조회 — 목록엔 없고 필요할 때만 불러옴."""
+    expense = await db.get(Expense, expense_id)
+    if expense is None or expense.trip_id != trip.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "지출 항목을 찾을 수 없음")
+    return {"image": expense.receipt_image or ""}
+
+
 @router.delete("/{trip_id}/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_expense(expense_id: int, trip: Trip = Depends(require_trip_editor), db: AsyncSession = Depends(get_db)):
     expense = await db.get(Expense, expense_id)

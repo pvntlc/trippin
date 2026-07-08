@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator, Modal, Alert, Platform } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator, Modal, Alert, Platform, KeyboardAvoidingView, ScrollView, Image } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 
@@ -40,6 +40,9 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   const [atDestination, setAtDestination] = useState(false);
   const [expCurrency, setExpCurrency] = useState(currency);   // 지출별 통화(엔·원 동시 사용)
   const [expDay, setExpDay] = useState<number | null>(null);  // 지출을 며칠차에 (null=공통)
+  const [editing, setEditing] = useState<Expense | null>(null);   // null=추가, 값=수정
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);  // 새로 첨부/교체할 영수증(data URI)
+  const [viewReceipt, setViewReceipt] = useState<string | null>(null);    // 영수증 크게 보기
   const dayCount = tripDayCount(startDate, endDate);
 
   const { data: expenses, isLoading } = useQuery({
@@ -95,11 +98,58 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   };
 
   const openAdd = () => {
+    setEditing(null);
+    setTitle(""); setAmount(""); setCategory(CATEGORIES[0]);
+    setReceiptImage(null);
     setPaidBy(me?.id ?? null);
     setSplitIds(accepted.map(m => m.user.id));   // 기본 = 전원 분담
     setExpCurrency(currency);
     setExpDay(null);
     setShow(true);
+  };
+
+  const openEdit = (e: Expense) => {
+    setEditing(e);
+    setTitle(e.title); setAmount(String(e.amount));
+    setCategory(CATEGORIES.includes(e.category) ? e.category : CATEGORIES[0]);
+    setExpCurrency(e.currency);
+    setExpDay(e.day_index);
+    setPaidBy(e.paid_by ?? me?.id ?? null);
+    setSplitIds(e.split_user_ids?.length ? e.split_user_ids : accepted.map(m => m.user.id));
+    setReceiptImage(null);   // 기존 영수증 유지(교체 시에만 변경)
+    setShow(true);
+  };
+
+  // 카메라 촬영 or 앨범 선택 → data URI 반환
+  const captureImage = async (fromCamera: boolean): Promise<string | null> => {
+    let res;
+    if (fromCamera && Platform.OS !== "web") {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { notify("카메라 권한이 필요해요. 설정에서 허용해 주세요."); return null; }
+      res = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5, base64: true });
+    } else {
+      res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5, base64: true });
+    }
+    if (res.canceled || !res.assets?.[0]?.base64) return null;
+    const a = res.assets[0];
+    return `data:${a.mimeType || "image/jpeg"};base64,${a.base64}`;
+  };
+
+  const attachReceipt = () => {
+    if (Platform.OS === "web") { captureImage(false).then((u) => u && setReceiptImage(u)); return; }
+    Alert.alert("영수증 사진", undefined, [
+      { text: "📷 촬영", onPress: () => captureImage(true).then((u) => u && setReceiptImage(u)) },
+      { text: "🖼 앨범에서", onPress: () => captureImage(false).then((u) => u && setReceiptImage(u)) },
+      { text: "취소", style: "cancel" },
+    ]);
+  };
+
+  const viewExistingReceipt = async (id: number) => {
+    try {
+      const { image } = await expenseApi.receipt(tripId, id);
+      if (image) setViewReceipt(image);
+      else notify("첨부된 영수증이 없어요.");
+    } catch { notify("영수증을 불러오지 못했어요."); }
   };
 
   // 영수증 사진 → 지출 자동 입력
@@ -128,6 +178,7 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
       setScanning(true);
       const parsed = await expenseApi.parseReceipt(tripId, asset.base64!, asset.mimeType || "image/jpeg");
       openAdd();
+      setReceiptImage(`data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`);  // 스캔 사진 자동 첨부
       if (parsed.title) setTitle(parsed.title);
       if (parsed.amount) setAmount(String(parsed.amount));
       if (parsed.category && CATEGORIES.includes(parsed.category)) setCategory(parsed.category);
@@ -139,16 +190,19 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
     }
   };
 
-  const addMut = useMutation({
-    mutationFn: () =>
-      expenseApi.add(tripId, {
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const payload: Partial<Expense> = {
         title: title.trim(), amount: Number(amount) || 0, currency: expCurrency, category,
         day_index: expDay,
         paid_by: paidBy ?? undefined,
         split_user_ids: splitIds.length ? splitIds : (paidBy ? [paidBy] : []),
-      }),
-    onSuccess: () => { setShow(false); setTitle(""); setAmount(""); invalidate(); },
-    onError: (e: any) => Alert.alert("추가 실패", e?.message ?? ""),
+      };
+      if (receiptImage) payload.receipt_image = receiptImage;   // 새로 첨부/교체한 경우만 전송
+      return editing ? expenseApi.update(tripId, editing.id, payload) : expenseApi.add(tripId, payload);
+    },
+    onSuccess: () => { setShow(false); setEditing(null); setReceiptImage(null); setTitle(""); setAmount(""); invalidate(); },
+    onError: (e: any) => Alert.alert(editing ? "수정 실패" : "추가 실패", e?.message ?? ""),
   });
   const removeMut = useMutation({
     mutationFn: (id: number) => expenseApi.remove(tripId, id),
@@ -218,7 +272,12 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
           const n = split.length || (item.paid_by ? 1 : 0);
           const per = n > 1 ? item.amount / n : null;
           return (
-            <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => canEdit && openEdit(item)}
+              activeOpacity={canEdit ? 0.6 : 1}
+              disabled={!canEdit}
+            >
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemTitle}>{item.title}</Text>
                 <Text style={styles.itemCat}>
@@ -236,12 +295,17 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
                   <Text style={styles.amountKrw}>≈ ₩{fmt(toKRW(item.amount, item.currency)!)}</Text>
                 )}
               </View>
+              {item.has_receipt && (
+                <TouchableOpacity onPress={() => viewExistingReceipt(item.id)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                  <Text style={styles.receiptClip}>📎</Text>
+                </TouchableOpacity>
+              )}
               {canEdit && (
-                <TouchableOpacity onPress={() => removeMut.mutate(item.id)}>
+                <TouchableOpacity onPress={() => removeMut.mutate(item.id)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                   <Text style={styles.delete}>✕</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </TouchableOpacity>
           );
         }}
       />
@@ -261,10 +325,11 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
         </View>
       )}
 
-      <Modal visible={show} transparent animationType="slide">
-        <View style={styles.modalBg}>
+      <Modal visible={show} transparent animationType="slide" onRequestClose={() => setShow(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>지출 추가</Text>
+            <Text style={styles.modalTitle}>{editing ? "지출 수정" : "지출 추가"}</Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <TextInput style={styles.input} placeholder="내용 (예: 호텔 2박)" value={title} onChangeText={setTitle} placeholderTextColor={Colors.textMuted} />
             <TextInput style={styles.input} placeholder={`금액 (${expCurrency})`} value={amount} onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ""))} keyboardType="numeric" inputMode="decimal" placeholderTextColor={Colors.textMuted} />
             <View style={styles.curRow}>
@@ -332,16 +397,41 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
               </>
             )}
 
+            {/* 영수증 사진 첨부 */}
+            <Text style={styles.sectionLabel}>영수증 사진</Text>
+            {receiptImage ? (
+              <View style={styles.receiptRow}>
+                <Image source={{ uri: receiptImage }} style={styles.receiptThumb} resizeMode="cover" />
+                <TouchableOpacity onPress={() => setReceiptImage(null)}><Text style={styles.receiptRemove}>제거</Text></TouchableOpacity>
+              </View>
+            ) : editing?.has_receipt ? (
+              <TouchableOpacity onPress={() => editing && viewExistingReceipt(editing.id)}>
+                <Text style={styles.receiptAttached}>📎 첨부됨 — 눌러서 보기</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity style={styles.attachBtn} onPress={attachReceipt}>
+              <Text style={styles.attachText}>📎 {receiptImage || editing?.has_receipt ? "영수증 교체" : "영수증 사진 첨부"}</Text>
+            </TouchableOpacity>
+            </ScrollView>
+
             <View style={styles.modalRow}>
               <TouchableOpacity style={[styles.mBtn, styles.cancel]} onPress={() => setShow(false)}>
                 <Text style={styles.cancelText}>취소</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.mBtn, styles.confirm]} onPress={() => title.trim() && addMut.mutate()}>
-                <Text style={styles.confirmText}>추가</Text>
+              <TouchableOpacity style={[styles.mBtn, styles.confirm]} onPress={() => title.trim() && saveMut.mutate()} disabled={saveMut.isPending}>
+                <Text style={styles.confirmText}>{editing ? "저장" : "추가"}</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* 영수증 크게 보기 */}
+      <Modal visible={!!viewReceipt} transparent animationType="fade" onRequestClose={() => setViewReceipt(null)}>
+        <TouchableOpacity style={styles.viewBg} activeOpacity={1} onPress={() => setViewReceipt(null)}>
+          {!!viewReceipt && <Image source={{ uri: viewReceipt }} style={styles.viewImg} resizeMode="contain" />}
+          <Text style={styles.viewClose}>탭하면 닫기</Text>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -379,7 +469,17 @@ const styles = StyleSheet.create({
   scanBtn: { backgroundColor: Colors.bgCard, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.accent },
   scanText: { color: Colors.accentDeep, fontSize: 14, fontWeight: "700" },
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  modalCard: { backgroundColor: Colors.bgCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "88%" },
+  receiptRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 },
+  receiptThumb: { width: 60, height: 60, borderRadius: 8, backgroundColor: Colors.bgCardAlt },
+  receiptRemove: { color: Colors.danger, fontSize: 13, fontWeight: "700" },
+  receiptAttached: { color: Colors.accentDeep, fontSize: 13, fontWeight: "700", marginBottom: 8 },
+  attachBtn: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed", paddingVertical: 11, alignItems: "center", marginBottom: 4 },
+  attachText: { color: Colors.accentDeep, fontSize: 13.5, fontWeight: "700" },
+  receiptClip: { fontSize: 15, paddingHorizontal: 2 },
+  viewBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", alignItems: "center", justifyContent: "center", padding: 16 },
+  viewImg: { width: "100%", height: "82%" },
+  viewClose: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 14 },
   modalTitle: { fontSize: 18, fontWeight: "700", color: Colors.text, marginBottom: 16 },
   input: { backgroundColor: Colors.bgCardAlt, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 10, color: Colors.text },
   sectionLabel: { fontSize: 13, fontWeight: "700", color: Colors.textSub, marginTop: 6, marginBottom: 6 },

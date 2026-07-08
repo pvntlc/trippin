@@ -12,6 +12,8 @@ class ExpenseCreate(BaseModel):
     paid_by: int | None = None
     # 분담 참여자 user_id 목록. 빈 리스트 = 낸 사람 혼자 부담.
     split_user_ids: list[int] = []
+    # 영수증 사진 (data URI base64). 선택.
+    receipt_image: str | None = None
 
 
 class ExpenseUpdate(BaseModel):
@@ -22,6 +24,7 @@ class ExpenseUpdate(BaseModel):
     day_index: int | None = None
     paid_by: int | None = None
     split_user_ids: list[int] | None = None
+    receipt_image: str | None = None
 
 
 class ExpenseOut(BaseModel):
@@ -34,6 +37,7 @@ class ExpenseOut(BaseModel):
     category: str
     paid_by: int | None
     split_user_ids: list[int] = []
+    has_receipt: bool = False
 
     @field_validator("split_user_ids", mode="before")
     @classmethod

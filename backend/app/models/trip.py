@@ -93,9 +93,15 @@ class Expense(Base):
     paid_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     # 분담 참여자 user_id 목록(JSON 문자열). 빈 값 = 낸 사람 혼자 부담.
     split_user_ids: Mapped[str] = mapped_column(Text, default="")
+    # 영수증 사진(data URI base64). 목록 응답엔 미포함(무거움) — 별도 조회 엔드포인트로.
+    receipt_image: Mapped[str | None] = mapped_column(Text, default="", nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     trip: Mapped["Trip"] = relationship(back_populates="expenses")
+
+    @property
+    def has_receipt(self) -> bool:
+        return bool(self.receipt_image)
 
 
 class ChecklistItem(Base):
