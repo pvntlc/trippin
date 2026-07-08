@@ -46,6 +46,13 @@
         {
           "locationWhenInUsePermission": "여행지에 있을 때 지출 빠른 기록을 제안하기 위해 위치를 사용합니다."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "영수증을 촬영해 지출을 자동 입력하기 위해 카메라를 사용합니다.",
+          "photosPermission": "영수증 사진을 불러오기 위해 사진 접근이 필요합니다."
+        }
       ]
     ]
   }

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Platform, Share, Alert } from "react-native";
+import { View, Text, SectionList, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Modal, Linking } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { placeApi, tripApi, expenseApi, fxApi, type Place, type Trip, type TransitOption } from "../../services/api";
 import { Colors } from "../../constants/colors";
+import { PlaceThumb } from "../../components/PlaceThumb";
 import { PlaceSearchModal } from "./PlaceSearchModal";
 import { PlaceEditModal } from "./PlaceEditModal";
 import { TravelLeg, type LegMode } from "./TravelLeg";
@@ -176,70 +177,49 @@ export function ItineraryTab({
 
   const openSearch = (day: number | null | undefined) => { setSearchDay(day); setShowSearch(true); };
 
-  // 구글 My Maps 로 내보내기 (KML)
-  const [exporting, setExporting] = useState(false);
-  const notify = (m: string) => { if (Platform.OS === "web") { try { window.alert(m); } catch {} } else Alert.alert("구글맵 내보내기", m); };
-  const exportToMaps = async () => {
-    setExporting(true);
-    try {
-      const { filename, content, count } = await tripApi.exportKml(tripId);
-      if (count === 0) { notify("지도에 찍을 좌표가 있는 장소가 없어요."); return; }
-      if (Platform.OS === "web" && typeof document !== "undefined") {
-        const blob = new Blob([content], { type: "application/vnd.google-earth.kml+xml" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = filename; a.click();
-        URL.revokeObjectURL(url);
-        notify(`${count}곳을 담은 지도 파일(${filename})을 내려받았어요.\n\n구글 My Maps(mymaps.google.com) → '새 지도 만들기' → '가져오기'에서 이 파일을 올리면 모든 장소가 핀으로 떠요. 구글맵 앱에서도 열립니다.`);
-      } else {
-        const lines = (places ?? []).filter((p) => p.lat != null).map((p) => `• ${p.name}`);
-        await Share.share({ title: trip.title, message: `${trip.title}\n\n${lines.join("\n")}\n\n구글 My Maps 에서 'KML 가져오기'로 지도에 저장하세요.` });
-      }
-    } catch (e: any) {
-      notify(e?.message ?? "내보내기에 실패했어요.");
-    } finally {
-      setExporting(false);
-    }
+  // 장소 → 구글맵 상세보기 열기
+  const openInGoogleMaps = (p: Place) => {
+    const url = p.google_place_id
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${encodeURIComponent(p.google_place_id)}`
+      : p.lat != null
+        ? `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
+    Linking.openURL(url).catch(() => {});
   };
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
   }
 
+  const weatherHeader = wdays.length > 0 ? (
+    <View style={styles.wxHeader}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wxRow}>
+        {wdays.map((w, i) => (
+          <View key={w.date} style={styles.wxCard}>
+            <Text style={styles.wxDay}>Day {i + 1}</Text>
+            <Text style={styles.wxEmoji}>{w.emoji}</Text>
+            <Text style={styles.wxTemp}>
+              {w.tmax != null ? `${w.tmax}°` : "-"}
+              <Text style={styles.wxTempMin}> / {w.tmin != null ? `${w.tmin}°` : "-"}</Text>
+            </Text>
+            {w.precip != null && (
+              <Text style={styles.wxRain}>{w.historical ? `☔${w.precip}mm` : `💧${w.precip}%`}</Text>
+            )}
+          </View>
+        ))}
+      </ScrollView>
+      {wHistorical && <Text style={styles.wxNote}>* 예보 범위 밖 — 작년 동기(평년) 참고값</Text>}
+    </View>
+  ) : null;
+
   return (
     <View style={styles.container}>
-      {(places?.length ?? 0) > 0 && (
-        <TouchableOpacity style={styles.exportBtn} onPress={exportToMaps} disabled={exporting}>
-          {exporting
-            ? <ActivityIndicator color={Colors.accentDeep} />
-            : <Text style={styles.exportText}>🗺  구글 My Maps로 내보내기</Text>}
-        </TouchableOpacity>
-      )}
-      {wdays.length > 0 && (
-        <View style={styles.wxWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wxRow}>
-            {wdays.map((w, i) => (
-              <View key={w.date} style={styles.wxCard}>
-                <Text style={styles.wxDay}>Day {i + 1}</Text>
-                <Text style={styles.wxEmoji}>{w.emoji}</Text>
-                <Text style={styles.wxTemp}>
-                  {w.tmax != null ? `${w.tmax}°` : "-"}
-                  <Text style={styles.wxTempMin}> / {w.tmin != null ? `${w.tmin}°` : "-"}</Text>
-                </Text>
-                {w.precip != null && (
-                  <Text style={styles.wxRain}>{w.historical ? `☔${w.precip}mm` : `💧${w.precip}%`}</Text>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-          {wHistorical && <Text style={styles.wxNote}>* 예보 범위 밖 — 작년 동기(평년) 참고값</Text>}
-        </View>
-      )}
       <SectionList
         sections={sections}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, paddingBottom: 90 }}
         stickySectionHeadersEnabled={false}
+        ListHeaderComponent={weatherHeader}
         renderSectionHeader={({ section }) => {
           const coordCount = section.data.filter((p) => p.lat != null && p.lng != null).length;
           return (
@@ -301,12 +281,20 @@ export function ItineraryTab({
               <Text style={[styles.time, !item.planned_time && styles.timeNone]}>
                 {item.planned_time || "미정"}
               </Text>
+              <PlaceThumb placeId={item.google_place_id} category={item.category} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.placeName}>{item.name}</Text>
                 {/* 지번 주소 대신 '어떤 곳인지' 설명(note)을 작게. 탭하면 편집 가능. */}
                 {!!item.note && <Text style={styles.placeAddr}>{item.note}</Text>}
               </View>
               {!!item.category && <Text style={styles.tag}>{item.category}</Text>}
+              <TouchableOpacity
+                style={styles.mapBtn}
+                onPress={() => openInGoogleMaps(item)}
+                hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+              >
+                <Text style={styles.mapBtnText}>🗺</Text>
+              </TouchableOpacity>
               {canEdit && (
                 <TouchableOpacity
                   style={styles.delBtn}
@@ -419,9 +407,9 @@ const styles = StyleSheet.create({
   placeAddr: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   placeNote: { fontSize: 12, color: Colors.textSub, marginTop: 4 },
   tag: { fontSize: 11, color: Colors.textSub, backgroundColor: Colors.bgCardAlt, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: "hidden" },
-  exportBtn: { marginTop: 10, marginHorizontal: 16, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.accent, borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  exportText: { color: Colors.accentDeep, fontSize: 13.5, fontWeight: "700" },
-  wxWrap: { paddingTop: 10 },
+  mapBtn: { paddingHorizontal: 4, paddingVertical: 2 },
+  mapBtnText: { fontSize: 17 },
+  wxHeader: { marginHorizontal: -16, marginBottom: 8 },
   wxRow: { paddingHorizontal: 16, gap: 8 },
   wxCard: { alignItems: "center", backgroundColor: Colors.bgCard, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 8, minWidth: 66 },
   wxDay: { fontSize: 11, color: Colors.textMuted, fontWeight: "700" },

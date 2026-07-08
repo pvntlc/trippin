@@ -110,11 +110,19 @@ export function BudgetTab({ tripId, canEdit, currency, startDate, endDate }: {
   };
   const scanReceipt = async () => {
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.5,
-        base64: true,
-      });
+      // 카메라로 바로 촬영 (웹은 카메라 대신 파일선택으로 폴백)
+      let res;
+      if (Platform.OS === "web") {
+        res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5, base64: true,
+        });
+      } else {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { notify("카메라 권한이 필요해요. 설정에서 허용해 주세요."); return; }
+        res = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5, base64: true,
+        });
+      }
       if (res.canceled || !res.assets?.[0]?.base64) return;
       const asset = res.assets[0];
       setScanning(true);

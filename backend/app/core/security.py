@@ -17,8 +17,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(subject: str | int) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": str(subject), "exp": expire}
+    # 로그인 타임아웃 제거 — exp 미포함으로 만료 없이 로그인 유지(재로그인 불편 해소).
+    payload = {"sub": str(subject)}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
