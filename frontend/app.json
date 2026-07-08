@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trippin",
     "slug": "trippin",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "trippin",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.trippin.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
