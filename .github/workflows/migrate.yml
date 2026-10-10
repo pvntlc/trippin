@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "transfer-db | stop-old | harden-old"
+        description: "transfer-db | stop-old | harden-old | inspect-old-sm | retire-old-sm"
         required: true
         default: "harden-old"
 
@@ -83,3 +83,67 @@ jobs:
             sudo sshd -t && sudo systemctl reload ssh && echo "sshd hardened"
             echo "=== verify admin blocked ==="
             curl -s -o /dev/null -w "admin/server-info via nginx: %{http_code}\n" http://127.0.0.1/api/v1/admin/server-info || true
+
+  # 구서버의 옛 마켓아이(stock-manager) 내리기(2026-10-10 보안 점검) — 이 저장소는 공개라 실행 로그도 공개다.
+  # 로그에는 서비스·폴더 '이름과 상태'만 찍고 파일 내용·주소·키는 찍지 않는다. 데이터는 지우지 않고 잠근다.
+  inspect-old-sm:
+    if: ${{ inputs.mode == 'inspect-old-sm' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect old server (names and states only)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 2222
+          script: |
+            for s in stock-manager trippin nginx; do printf '%s: ' "$s"; systemctl is-active "$s" 2>/dev/null || true; done
+            printf 'stock-manager enabled: '; systemctl is-enabled stock-manager 2>/dev/null || true
+            echo "sites-enabled:"; ls /etc/nginx/sites-enabled/ 2>/dev/null | sed 's/^/  /'
+            echo "web roots:"; ls -d /var/www/*/ 2>/dev/null | sed 's/^/  /'
+            printf 'app dir present: '; [ -d "$HOME/stock-manager" ] && echo yes || echo no
+            printf 'local / title: '; curl -s --max-time 5 http://127.0.0.1/ | grep -o '<title>[^<]*</title>' | head -1 || true
+            printf 'local api health: '; curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://127.0.0.1/api/v1/health || true
+
+  retire-old-sm:
+    if: ${{ inputs.mode == 'retire-old-sm' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retire old stock-manager (stop, unpublish, lock; no deletion)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 2222
+          command_timeout: 10m
+          script: |
+            set -e
+            STAMP=$(date +%Y%m%d)
+            # 1) 옛 API 서비스 끄기
+            if systemctl list-unit-files 2>/dev/null | grep -q '^stock-manager\.service'; then
+              sudo systemctl disable --now stock-manager
+            fi
+            printf 'stock-manager: '; systemctl is-active stock-manager 2>/dev/null || true
+            # 2) 웹 공개 끊기 — 화면 파일을 root 만 여는 곳으로 옮긴다(지우지 않는다)
+            sudo mkdir -p /root/retired && sudo chmod 700 /root/retired
+            if [ -d /var/www/stock-manager ]; then
+              sudo mv /var/www/stock-manager "/root/retired/www-stock-manager-$STAMP"
+              echo "web root moved to /root/retired"
+            fi
+            # 3) nginx 에서 옛 마켓아이 사이트 끄기(설정 파일은 sites-available 에 그대로 둔다)
+            for f in $(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -i stock || true); do
+              sudo rm -f "/etc/nginx/sites-enabled/$f"
+              echo "disabled site: $f"
+            done
+            sudo nginx -t && sudo systemctl reload nginx
+            # 4) 남은 앱 폴더(보유 데이터·.env)는 소유자만 열게 잠근다
+            if [ -d "$HOME/stock-manager" ]; then
+              chmod 700 "$HOME/stock-manager"
+              find "$HOME/stock-manager" -maxdepth 1 -type f \( -name '.env' -o -name '*.db' -o -name '*.json' \) -exec chmod 600 {} \;
+              echo "app dir locked (700, data files 600)"
+            fi
+            echo "=== verify ==="
+            printf 'local / title: '; curl -s --max-time 5 http://127.0.0.1/ | grep -o '<title>[^<]*</title>' | head -1 || echo none
+            printf 'local api health: '; curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://127.0.0.1/api/v1/health || true
